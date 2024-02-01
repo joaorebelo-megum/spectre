@@ -301,6 +301,7 @@ SPECTRE_TEST_CASE(
   pypp::SetupLocalPythonEnvironment local_python_env{
       "PointwiseFunctions/AnalyticData/Xcts"};
   test_data(1.1, .9, -4.5, 10.2, .99, 21., false,
+  test_data(1.1, .9, -4.5, 10.2, .99, 21., false,
             "BinaryWithGravitationalWaves:\n"
             "  MassLeft: 1.1\n"
             "  MassRight: .9\n"
@@ -309,11 +310,6 @@ SPECTRE_TEST_CASE(
             "  AttenuationParameter: .99\n"
             "  OuterRadius: 21.\n"
             "  WriteEvolutionOption: False");
-  auto stop = std::chrono::high_resolution_clock::now();  // >>>> TEST !!!!!!
-  auto duration = std::chrono::duration_cast<std::chrono::microseconds>(
-      stop - start);  // >>>> TEST !!!!!!
-  std::cout << "Duration >>>> " << duration.count() << " microseconds !"
-            << std::endl;  // >>>> TEST !!!!!!
 }
 
 }  // namespace Xcts::AnalyticData
