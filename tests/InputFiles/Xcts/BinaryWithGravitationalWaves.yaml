@@ -26,7 +26,7 @@ Background: &background
     XCoordsLeft: &x_left -8.
     XCoordsRight: &x_right 8.
     AttenuationParameter: 1.
-    OuterRadius: &outer_radius 50.
+    OuterRadius: &outer_radius 40.
     WriteEvolutionOption: True
 
 InitialGuess: *background
