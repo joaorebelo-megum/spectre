@@ -172,7 +172,9 @@ struct BinaryWithGravitationalWavesVariables
           DataType, Dim, Frame::ElementLogical, Frame::Inertial>>>
           local_inv_jacobian,
       const tnsr::I<DataType, 3>& local_x, const double local_mass_left,
-      const double local_mass_right,
+      const double local_mass_right, const double local_xcoord_left,
+      const double local_xcoord_right, const double local_ymomentum_left,
+      const double local_ymomentum_right,
       const double local_attenuation_parameter,
       const std::array<std::vector<double>, 3>& local_past_position_left,
       const std::array<std::vector<double>, 3>& local_past_position_right,
@@ -189,6 +191,10 @@ struct BinaryWithGravitationalWavesVariables
         x(local_x),
         mass_left(local_mass_left),
         mass_right(local_mass_right),
+        xcoord_left(local_xcoord_left),
+        xcoord_right(local_xcoord_right),
+        ymomentum_left(local_ymomentum_left),
+        ymomentum_right(local_ymomentum_right),
         attenuation_parameter(local_attenuation_parameter),
         past_position_left(local_past_position_left),
         past_position_right(local_past_position_right),
@@ -212,6 +218,8 @@ struct BinaryWithGravitationalWavesVariables
   const double mass_right;
   const double attenuation_parameter;
   const std::array<double, 3> normal_lr{{-1., 0., 0.}};
+  const std::array<double, 3> momentum_left{{0., ymomentum_left, 0.}};
+  const std::array<double, 3> momentum_right{{0., ymomentum_right, 0.}};
 
   const std::array<std::vector<double>, 3> past_position_left{};
   const std::array<std::vector<double>, 3> past_position_right{};
@@ -290,10 +298,10 @@ struct BinaryWithGravitationalWavesVariables
       gsl::not_null<Cache*> /*cache*/,
       detail::Tags::PostNewtonianExtrinsicCurvature<DataType> /*meta*/) const;
   void operator()(gsl::not_null<Scalar<DataType>*> retarded_time_left,
-                  gsl::not_null<Cache*> /*cache*/,
+                  gsl::not_null<Cache*> cache,
                   detail::Tags::RetardedTimeLeft<DataType> /*meta*/) const;
   void operator()(gsl::not_null<Scalar<DataType>*> retarded_time_right,
-                  gsl::not_null<Cache*> /*cache*/,
+                  gsl::not_null<Cache*> cache,
                   detail::Tags::RetardedTimeRight<DataType> /*meta*/) const;
   void operator()(
       gsl::not_null<Scalar<DataType>*> rootfinder_bracket_time_lower,
@@ -383,10 +391,28 @@ struct BinaryWithGravitationalWavesVariables
                   hydro::Tags::MagneticField<DataType, 3> /*meta*/) const;
 
  private:
-  double max_time_interpolator = std::numeric_limits<double>::signaling_NaN();
+  void add_radiative_term_PN_of_conformal_metric(
+      gsl::not_null<tnsr::ii<DataType, Dim>*> conformal_metric,
+      gsl::not_null<Cache*> cache) const;
+  void add_near_zone_term_to_radiative(
+      gsl::not_null<tnsr::ii<DataType, Dim>*> radiative_term,
+      gsl::not_null<Cache*> cache) const;
+  void add_present_term_to_radiative(
+      gsl::not_null<tnsr::ii<DataType, Dim>*> radiative_term,
+      gsl::not_null<Cache*> cache) const;
+  void add_past_term_to_radiative(
+      gsl::not_null<tnsr::ii<DataType, Dim>*> radiative_term,
+      gsl::not_null<Cache*> cache) const;
+  void add_integral_term_to_radiative(
+      gsl::not_null<tnsr::ii<DataType, Dim>*> radiative_term,
+      gsl::not_null<Cache*> cache) const;
+  Scalar<DataType> this_dot_product(const tnsr::I<DataType, 3>& a,
+                                    const std::array<double, 3>& b) const;
+  Scalar<DataType> this_dot_product(const std::array<double, 3>& a,
+                                    const tnsr::I<DataType, 3>& b) const;
   void interpolate_past_history();
-  DataType find_retarded_time_left(DataType t0) const;
-  DataType find_retarded_time_right(DataType t0) const;
+  DataType find_retarded_time_left(gsl::not_null<Cache*> cache) const;
+  DataType find_retarded_time_right(gsl::not_null<Cache*> cache) const;
   Scalar<DataType> get_past_distance_left(DataType t) const;
   Scalar<DataType> get_past_distance_right(DataType t) const;
   Scalar<DataType> get_past_separation(DataType t) const;
@@ -395,21 +421,6 @@ struct BinaryWithGravitationalWavesVariables
   tnsr::I<DataType, 3> get_past_normal_left(DataType t) const;
   tnsr::I<DataType, 3> get_past_normal_right(DataType t) const;
   tnsr::I<DataType, 3> get_past_normal_lr(DataType t) const;
-  DataType integrate_term(DataType t, size_t i, size_t j, int left_right,
-                          double t0) const;
-  tnsr::i<DataType, 3> get_past_deriv_one_over_distance_left(DataType t) const;
-  tnsr::i<DataType, 3> get_past_deriv_one_over_distance_right(DataType t) const;
-  tnsr::ijk<DataType, 3> get_past_deriv_3_distance_left(DataType t) const;
-  tnsr::ijk<DataType, 3> get_past_deriv_3_distance_right(DataType t) const;
-  tnsr::ii<DataType, 3> get_past_pn_conjugate_momentum3(DataType t) const;
-  tnsr::ii<DataType, 3> get_past_pn_extrinsic_curvature(DataType t) const;
-  Scalar<DataType> get_past_trace_extrinsic_curvature(DataType t) const;
-  tnsr::ii<DataType, 3> get_past_conformal_metric(DataType t) const;
-  tnsr::ii<DataType, 3> get_past_radiative_term(DataType t) const;
-  tnsr::ii<DataType, 3> get_past_near_zone_term(DataType t) const;
-  tnsr::ii<DataType, 3> get_past_present_term(DataType t) const;
-  tnsr::ii<DataType, 3> get_past_past_term(DataType t) const;
-  tnsr::ii<DataType, 3> get_past_integral_term(DataType t) const;
 };
 
 }  // namespace detail
@@ -711,6 +722,10 @@ class BinaryWithGravitationalWaves
   double outer_radius_ = std::numeric_limits<double>::signaling_NaN();
   bool write_evolution_option_ = true;
 
+  double total_mass = 0.;
+  double reduced_mass = 0.;
+  double reduced_mass_over_total_mass = 0.;
+
   template <typename DataType, typename... RequestedTags>
   tuples::TaggedTuple<RequestedTags...> variables_impl(
       const tnsr::I<DataType, 3, Frame::Inertial>& x,
@@ -727,6 +742,10 @@ class BinaryWithGravitationalWaves
                                 x,
                                 mass_left_,
                                 mass_right_,
+                                xcoord_left_,
+                                xcoord_right_,
+                                ymomentum_left_,
+                                ymomentum_right_,
                                 attenuation_parameter_,
                                 past_position_left_,
                                 past_position_right_,

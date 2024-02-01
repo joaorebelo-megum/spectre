@@ -195,7 +195,7 @@ void BinaryWithGravitationalWavesVariables<DataType>::operator()(
 template <typename DataType>
 void BinaryWithGravitationalWavesVariables<DataType>::operator()(
     const gsl::not_null<tnsr::ii<DataType, 3>*> past_term,
-    const gsl::not_null<Cache*> /*cache*/,
+    const gsl::not_null<Cache*> cache,
     detail::Tags::PastTerm<DataType> /*meta*/) const {
   DataType present_time(get_size(get<0>(x)), max_time_interpolator);
   const auto past_term_aux = get_past_past_term(present_time);
@@ -1513,6 +1513,370 @@ BinaryWithGravitationalWavesVariables<DataType>::get_past_normal_lr(
   return v;
 }
 
+template <typename DataType>
+void BinaryWithGravitationalWavesVariables<
+    DataType>::interpolate_past_history() {
+  // Now interpolate the past history
+  using boost::math::interpolators::cubic_hermite;
+
+  for (size_t i = 0; i < 3; ++i) {
+    interpolation_position_left.at(i) = cubic_hermite<std::vector<double>>(
+        std::vector<double>(past_time),
+        std::vector<double>(past_position_left.at(i)),
+        std::vector<double>(past_dt_position_left.at(i)));
+    interpolation_position_right.at(i) = cubic_hermite<std::vector<double>>(
+        std::vector<double>(past_time),
+        std::vector<double>(past_position_right.at(i)),
+        std::vector<double>(past_dt_position_right.at(i)));
+    interpolation_momentum_left.at(i) = cubic_hermite<std::vector<double>>(
+        std::vector<double>(past_time),
+        std::vector<double>(past_momentum_left.at(i)),
+        std::vector<double>(past_dt_momentum_left.at(i)));
+    interpolation_momentum_right.at(i) = cubic_hermite<std::vector<double>>(
+        std::vector<double>(past_time),
+        std::vector<double>(past_momentum_right.at(i)),
+        std::vector<double>(past_dt_momentum_right.at(i)));
+  }
+}
+
+template <typename DataType>
+DataType
+BinaryWithGravitationalWavesVariables<DataType>::find_retarded_time_left(
+    const gsl::not_null<Cache*> cache) const {
+  const auto& rootfinder_bracket_time_lower = cache->get_var(
+      *this, detail::Tags::RootFinderBracketTimeLower<DataType>{});
+  const auto& rootfinder_bracket_time_upper = cache->get_var(
+      *this, detail::Tags::RootFinderBracketTimeUpper<DataType>{});
+  return RootFinder::toms748<true>(
+      [this](const auto time, const size_t i) {
+        tnsr::I<double, 3> v;
+        for (size_t j = 0; j < 3; ++j) {
+          v.get(j) =
+              this->x.get(j)[i] - this->interpolation_position_left.at(j)(time);
+        }
+
+        return get(magnitude(v)) + time;
+      },
+      get(rootfinder_bracket_time_lower), get(rootfinder_bracket_time_upper),
+      1e-8, 1e-10);
+}
+
+template <typename DataType>
+DataType
+BinaryWithGravitationalWavesVariables<DataType>::find_retarded_time_right(
+    const gsl::not_null<Cache*> cache) const {
+  const auto& rootfinder_bracket_time_lower = cache->get_var(
+      *this, detail::Tags::RootFinderBracketTimeLower<DataType>{});
+  const auto& rootfinder_bracket_time_upper = cache->get_var(
+      *this, detail::Tags::RootFinderBracketTimeUpper<DataType>{});
+  return RootFinder::toms748<true>(
+      [this](const auto time, const size_t i) {
+        tnsr::I<double, 3> v;
+        for (size_t j = 0; j < 3; ++j) {
+          v.get(j) = this->x.get(j)[i] -
+                     this->interpolation_position_right.at(j)(time);
+        }
+
+        return get(magnitude(v)) + time;
+      },
+      get(rootfinder_bracket_time_lower), get(rootfinder_bracket_time_upper),
+      1e-8, 1e-10);
+}
+
+BinaryWithGravitationalWavesVariables<DataType>::get_past_distance_left(
+    const DataType time) const {
+  tnsr::I<DataType, 3> v = x;
+  for (size_t i = 0; i < time.size(); ++i) {
+    for (size_t j = 0; j < 3; ++j) {
+      v.get(j)[i] = x.get(j)[i] - interpolation_position_left.at(j)(time[i]);
+    }
+  }
+  return magnitude(v);
+}
+
+template <typename DataType>
+Scalar<DataType>
+BinaryWithGravitationalWavesVariables<DataType>::get_past_distance_right(
+    const DataType time) const {
+  tnsr::I<DataType, 3> v = x;
+  for (size_t i = 0; i < time.size(); ++i) {
+    for (size_t j = 0; j < 3; ++j) {
+      v.get(j)[i] = x.get(j)[i] - interpolation_position_right.at(j)(time[i]);
+    }
+  }
+  return magnitude(v);
+}
+
+template <typename DataType>
+Scalar<DataType>
+BinaryWithGravitationalWavesVariables<DataType>::get_past_separation(
+    const DataType time) const {
+  tnsr::I<DataType, 3> v = x;
+  for (size_t i = 0; i < time.size(); ++i) {
+    for (size_t j = 0; j < 3; ++j) {
+      v.get(j)[i] = interpolation_position_right.at(j)(time[i]) -
+                    interpolation_position_left.at(j)(time[i]);
+    }
+  }
+  return magnitude(v);
+}
+
+template <typename DataType>
+tnsr::I<DataType, 3>
+BinaryWithGravitationalWavesVariables<DataType>::get_past_momentum_left(
+    const DataType time) const {
+  tnsr::I<DataType, 3> v = x;
+  for (size_t i = 0; i < time.size(); ++i) {
+    for (size_t j = 0; j < 3; ++j) {
+      v.get(j)[i] = interpolation_momentum_left.at(j)(time[i]);
+    }
+  }
+  return v;
+}
+
+template <typename DataType>
+tnsr::I<DataType, 3>
+BinaryWithGravitationalWavesVariables<DataType>::get_past_momentum_right(
+    const DataType time) const {
+  tnsr::I<DataType, 3> v = x;
+  for (size_t i = 0; i < time.size(); ++i) {
+    for (size_t j = 0; j < 3; ++j) {
+      v.get(j)[i] = interpolation_momentum_right.at(j)(time[i]);
+    }
+  }
+  return v;
+}
+
+template <typename DataType>
+tnsr::I<DataType, 3>
+BinaryWithGravitationalWavesVariables<DataType>::get_past_normal_left(
+    const DataType time) const {
+  tnsr::I<DataType, 3> v = x;
+  Scalar<DataType> distance_left = get_past_distance_left(time);
+  for (size_t i = 0; i < time.size(); ++i) {
+    for (size_t j = 0; j < 3; ++j) {
+      v.get(j)[i] = (x.get(j)[i] - interpolation_position_left.at(j)(time[i])) /
+                    get(distance_left)[i];
+    }
+  }
+  return v;
+}
+
+template <typename DataType>
+tnsr::I<DataType, 3>
+BinaryWithGravitationalWavesVariables<DataType>::get_past_normal_right(
+    const DataType time) const {
+  tnsr::I<DataType, 3> v = x;
+  Scalar<DataType> distance_right = get_past_distance_right(time);
+  for (size_t i = 0; i < time.size(); ++i) {
+    for (size_t j = 0; j < 3; ++j) {
+      v.get(j)[i] =
+          (x.get(j)[i] - interpolation_position_right.at(j)(time[i])) /
+          get(distance_right)[i];
+    }
+  }
+
+  return v;
+}
+
+template <typename DataType>
+tnsr::I<DataType, 3>
+BinaryWithGravitationalWavesVariables<DataType>::get_past_normal_lr(
+    const DataType time) const {
+  tnsr::I<DataType, 3> v = x;
+  Scalar<DataType> past_separation = get_past_separation(time);
+  for (size_t i = 0; i < time.size(); ++i) {
+    for (size_t j = 0; j < 3; ++j) {
+      v.get(j)[i] = (interpolation_position_left.at(j)(time[i]) -
+                     interpolation_position_right.at(j)(time[i])) /
+                    get(past_separation)[i];
+    }
+  }
+  return v;
+}
+
+template <typename DataType>
+void BinaryWithGravitationalWavesVariables<
+    DataType>::interpolate_past_history() {
+  // Now interpolate the past history
+  using boost::math::interpolators::cubic_hermite;
+
+  for (size_t i = 0; i < 3; ++i) {
+    interpolation_position_left.at(i) = cubic_hermite<std::vector<double>>(
+        std::vector<double>(past_time),
+        std::vector<double>(past_position_left.at(i)),
+        std::vector<double>(past_dt_position_left.at(i)));
+    interpolation_position_right.at(i) = cubic_hermite<std::vector<double>>(
+        std::vector<double>(past_time),
+        std::vector<double>(past_position_right.at(i)),
+        std::vector<double>(past_dt_position_right.at(i)));
+    interpolation_momentum_left.at(i) = cubic_hermite<std::vector<double>>(
+        std::vector<double>(past_time),
+        std::vector<double>(past_momentum_left.at(i)),
+        std::vector<double>(past_dt_momentum_left.at(i)));
+    interpolation_momentum_right.at(i) = cubic_hermite<std::vector<double>>(
+        std::vector<double>(past_time),
+        std::vector<double>(past_momentum_right.at(i)),
+        std::vector<double>(past_dt_momentum_right.at(i)));
+  }
+}
+
+template <typename DataType>
+DataType
+BinaryWithGravitationalWavesVariables<DataType>::find_retarded_time_left(
+    const gsl::not_null<Cache*> cache) const {
+  const auto& rootfinder_bracket_time_lower = cache->get_var(
+      *this, detail::Tags::RootFinderBracketTimeLower<DataType>{});
+  const auto& rootfinder_bracket_time_upper = cache->get_var(
+      *this, detail::Tags::RootFinderBracketTimeUpper<DataType>{});
+  return RootFinder::toms748<true>(
+      [this](const auto time, const size_t i) {
+        tnsr::I<double, 3> v;
+        for (size_t j = 0; j < 3; ++j) {
+          v.get(j) =
+              this->x.get(j)[i] - this->interpolation_position_left.at(j)(time);
+        }
+
+        return get(magnitude(v)) + time;
+      },
+      get(rootfinder_bracket_time_lower), get(rootfinder_bracket_time_upper),
+      1e-8, 1e-10);
+}
+
+template <typename DataType>
+DataType
+BinaryWithGravitationalWavesVariables<DataType>::find_retarded_time_right(
+    const gsl::not_null<Cache*> cache) const {
+  const auto& rootfinder_bracket_time_lower = cache->get_var(
+      *this, detail::Tags::RootFinderBracketTimeLower<DataType>{});
+  const auto& rootfinder_bracket_time_upper = cache->get_var(
+      *this, detail::Tags::RootFinderBracketTimeUpper<DataType>{});
+  return RootFinder::toms748<true>(
+      [this](const auto time, const size_t i) {
+        tnsr::I<double, 3> v;
+        for (size_t j = 0; j < 3; ++j) {
+          v.get(j) = this->x.get(j)[i] -
+                     this->interpolation_position_right.at(j)(time);
+        }
+
+        return get(magnitude(v)) + time;
+      },
+      get(rootfinder_bracket_time_lower), get(rootfinder_bracket_time_upper),
+      1e-8, 1e-10);
+}
+
+BinaryWithGravitationalWavesVariables<DataType>::get_past_distance_left(
+    const DataType time) const {
+  tnsr::I<DataType, 3> v = x;
+  for (size_t i = 0; i < time.size(); ++i) {
+    for (size_t j = 0; j < 3; ++j) {
+      v.get(j)[i] = x.get(j)[i] - interpolation_position_left.at(j)(time[i]);
+    }
+  }
+  return magnitude(v);
+}
+
+template <typename DataType>
+Scalar<DataType>
+BinaryWithGravitationalWavesVariables<DataType>::get_past_distance_right(
+    const DataType time) const {
+  tnsr::I<DataType, 3> v = x;
+  for (size_t i = 0; i < time.size(); ++i) {
+    for (size_t j = 0; j < 3; ++j) {
+      v.get(j)[i] = x.get(j)[i] - interpolation_position_right.at(j)(time[i]);
+    }
+  }
+  return magnitude(v);
+}
+
+template <typename DataType>
+Scalar<DataType>
+BinaryWithGravitationalWavesVariables<DataType>::get_past_separation(
+    const DataType time) const {
+  tnsr::I<DataType, 3> v = x;
+  for (size_t i = 0; i < time.size(); ++i) {
+    for (size_t j = 0; j < 3; ++j) {
+      v.get(j)[i] = interpolation_position_right.at(j)(time[i]) -
+                    interpolation_position_left.at(j)(time[i]);
+    }
+  }
+  return magnitude(v);
+}
+
+template <typename DataType>
+tnsr::I<DataType, 3>
+BinaryWithGravitationalWavesVariables<DataType>::get_past_momentum_left(
+    const DataType time) const {
+  tnsr::I<DataType, 3> v = x;
+  for (size_t i = 0; i < time.size(); ++i) {
+    for (size_t j = 0; j < 3; ++j) {
+      v.get(j)[i] = interpolation_momentum_left.at(j)(time[i]);
+    }
+  }
+  return v;
+}
+
+template <typename DataType>
+tnsr::I<DataType, 3>
+BinaryWithGravitationalWavesVariables<DataType>::get_past_momentum_right(
+    const DataType time) const {
+  tnsr::I<DataType, 3> v = x;
+  for (size_t i = 0; i < time.size(); ++i) {
+    for (size_t j = 0; j < 3; ++j) {
+      v.get(j)[i] = interpolation_momentum_right.at(j)(time[i]);
+    }
+  }
+  return v;
+}
+
+template <typename DataType>
+tnsr::I<DataType, 3>
+BinaryWithGravitationalWavesVariables<DataType>::get_past_normal_left(
+    const DataType time) const {
+  tnsr::I<DataType, 3> v = x;
+  Scalar<DataType> distance_left = get_past_distance_left(time);
+  for (size_t i = 0; i < time.size(); ++i) {
+    for (size_t j = 0; j < 3; ++j) {
+      v.get(j)[i] = (x.get(j)[i] - interpolation_position_left.at(j)(time[i])) /
+                    get(distance_left)[i];
+    }
+  }
+  return v;
+}
+
+template <typename DataType>
+tnsr::I<DataType, 3>
+BinaryWithGravitationalWavesVariables<DataType>::get_past_normal_right(
+    const DataType time) const {
+  tnsr::I<DataType, 3> v = x;
+  Scalar<DataType> distance_right = get_past_distance_right(time);
+  for (size_t i = 0; i < time.size(); ++i) {
+    for (size_t j = 0; j < 3; ++j) {
+      v.get(j)[i] =
+          (x.get(j)[i] - interpolation_position_right.at(j)(time[i])) /
+          get(distance_right)[i];
+    }
+  }
+
+  return v;
+}
+
+template <typename DataType>
+tnsr::I<DataType, 3>
+BinaryWithGravitationalWavesVariables<DataType>::get_past_normal_lr(
+    const DataType time) const {
+  tnsr::I<DataType, 3> v = x;
+  Scalar<DataType> past_separation = get_past_separation(time);
+  for (size_t i = 0; i < time.size(); ++i) {
+    for (size_t j = 0; j < 3; ++j) {
+      v.get(j)[i] = (interpolation_position_left.at(j)(time[i]) -
+                     interpolation_position_right.at(j)(time[i])) /
+                    get(past_separation)[i];
+    }
+  }
+  return v;
+}
+
 template class BinaryWithGravitationalWavesVariables<DataVector>;
 
 }  // namespace detail
@@ -2082,7 +2446,7 @@ void BinaryWithGravitationalWaves::hamiltonian_system(
                   (x[2] * x[3] - x[0] * x[5]) * (x[2] * x[3] - x[0] * x[5]) +
                   (x[0] * x[4] - x[1] * x[3]) * (x[0] * x[4] - x[1] * x[3]));
   double w =
-      reduced_mass / (total_mass * mass_left()) * L / (total_mass * qdotq);
+      reduced_mass / (total_mass * mass_left()) * sqrt(pdotp) / sqrt(qdotq);
   double vw = std::cbrt(total_mass * w);
   double gamma_Euler = 0.57721566490153286060651209008240243104215933593992;
 
