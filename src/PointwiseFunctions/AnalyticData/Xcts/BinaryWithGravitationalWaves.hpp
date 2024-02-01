@@ -7,6 +7,7 @@
 #include <limits>
 #include <optional>
 #include <vector>
+#include <vector>
 
 #include "DataStructures/CachedTempBuffer.hpp"
 #include "DataStructures/DataBox/Prefixes.hpp"
@@ -185,7 +186,7 @@ struct BinaryWithGravitationalWavesVariables
       const std::array<std::vector<double>, 3>& local_past_dt_momentum_left,
       const std::array<std::vector<double>, 3>& local_past_dt_momentum_right,
       const std::vector<double>& local_past_time)
-      : Base(local_mesh, local_inv_jacobian),
+      : Base(std::move(local_mesh), std::move(local_inv_jacobian)),
         mesh(std::move(local_mesh)),
         inv_jacobian(std::move(local_inv_jacobian)),
         x(local_x),
@@ -752,6 +753,10 @@ class BinaryWithGravitationalWaves
   double attenuation_parameter_ = std::numeric_limits<double>::signaling_NaN();
   double outer_radius_ = std::numeric_limits<double>::signaling_NaN();
   bool write_evolution_option_ = true;
+
+  double total_mass = 0.;
+  double reduced_mass = 0.;
+  double reduced_mass_over_total_mass = 0.;
 
   template <typename DataType, typename... RequestedTags>
   tuples::TaggedTuple<RequestedTags...> variables_impl(
