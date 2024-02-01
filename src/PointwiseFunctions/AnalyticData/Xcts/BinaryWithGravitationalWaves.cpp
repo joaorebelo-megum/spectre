@@ -4,8 +4,6 @@
 #include "PointwiseFunctions/AnalyticData/Xcts/BinaryWithGravitationalWaves.hpp"
 
 #include <boost/math/interpolators/cubic_hermite.hpp>
-#include <boost/math/quadrature/gauss_kronrod.hpp>
-#include <boost/math/quadrature/trapezoidal.hpp>
 #include <cstddef>
 
 #include "DataStructures/BoostMultiArray.hpp"
@@ -17,7 +15,6 @@
 #include "DataStructures/Tensor/EagerMath/Trace.hpp"
 #include "DataStructures/Tensor/Tensor.hpp"
 #include "Elliptic/Systems/Xcts/Tags.hpp"
-#include "NumericalAlgorithms/Integration/GslQuadAdaptive.hpp"
 #include "NumericalAlgorithms/RootFinding/TOMS748.hpp"
 #include "PointwiseFunctions/AnalyticData/Xcts/CommonVariables.tpp"
 #include "PointwiseFunctions/Elasticity/Strain.hpp"
@@ -598,7 +595,7 @@ void BinaryWithGravitationalWavesVariables<DataType>::operator()(
     const gsl::not_null<Scalar<DataType>*> rootfinder_bracket_time_upper,
     const gsl::not_null<Cache*> /*cache*/,
     detail::Tags::RootFinderBracketTimeUpper<DataType> /*meta*/) const {
-  get(*rootfinder_bracket_time_upper) = max_time_interpolator;
+  get(*rootfinder_bracket_time_upper) = past_time.back();
 
 }  // namespace detail
 

@@ -7,7 +7,6 @@
 #include <limits>
 #include <optional>
 #include <vector>
-#include <vector>
 
 #include "DataStructures/CachedTempBuffer.hpp"
 #include "DataStructures/DataBox/Prefixes.hpp"
@@ -227,15 +226,15 @@ struct BinaryWithGravitationalWavesVariables
   const std::array<double, 3> momentum_left{{0., ymomentum_left, 0.}};
   const std::array<double, 3> momentum_right{{0., ymomentum_right, 0.}};
 
-  const std::array<std::vector<double>, 3>& past_position_left{};
-  const std::array<std::vector<double>, 3>& past_position_right{};
-  const std::array<std::vector<double>, 3>& past_dt_position_left{};
-  const std::array<std::vector<double>, 3>& past_dt_position_right{};
-  const std::array<std::vector<double>, 3>& past_momentum_left{};
-  const std::array<std::vector<double>, 3>& past_momentum_right{};
-  const std::array<std::vector<double>, 3>& past_dt_momentum_left{};
-  const std::array<std::vector<double>, 3>& past_dt_momentum_right{};
-  const std::vector<double>& past_time{};
+  const std::array<std::vector<double>, 3> past_position_left{};
+  const std::array<std::vector<double>, 3> past_position_right{};
+  const std::array<std::vector<double>, 3> past_dt_position_left{};
+  const std::array<std::vector<double>, 3> past_dt_position_right{};
+  const std::array<std::vector<double>, 3> past_momentum_left{};
+  const std::array<std::vector<double>, 3> past_momentum_right{};
+  const std::array<std::vector<double>, 3> past_dt_momentum_left{};
+  const std::array<std::vector<double>, 3> past_dt_momentum_right{};
+  const std::vector<double> past_time{};
 
   std::array<std::function<double(double)>, 3> interpolation_position_left{};
   std::array<std::function<double(double)>, 3> interpolation_position_right{};
@@ -293,7 +292,7 @@ struct BinaryWithGravitationalWavesVariables
                   gsl::not_null<Cache*> cache,
                   detail::Tags::PastTerm<DataType> /*meta*/) const;
   void operator()(gsl::not_null<tnsr::ii<DataType, Dim>*> integral_term,
-                  gsl::not_null<Cache*> cache,
+                  gsl::not_null<Cache*> /*cache*/,
                   detail::Tags::IntegralTerm<DataType> /*meta*/) const;
   void operator()(
       gsl::not_null<tnsr::ii<DataType, Dim>*> pn_conjugate_momentum3,
