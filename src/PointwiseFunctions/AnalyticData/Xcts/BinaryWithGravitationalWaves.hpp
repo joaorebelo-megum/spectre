@@ -292,7 +292,7 @@ struct BinaryWithGravitationalWavesVariables
                   gsl::not_null<Cache*> cache,
                   detail::Tags::PastTerm<DataType> /*meta*/) const;
   void operator()(gsl::not_null<tnsr::ii<DataType, Dim>*> integral_term,
-                  gsl::not_null<Cache*> cache,
+                  gsl::not_null<Cache*> /*cache*/,
                   detail::Tags::IntegralTerm<DataType> /*meta*/) const;
   void operator()(
       gsl::not_null<tnsr::ii<DataType, Dim>*> pn_conjugate_momentum3,
