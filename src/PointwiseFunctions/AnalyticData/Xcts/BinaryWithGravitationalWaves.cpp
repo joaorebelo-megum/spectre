@@ -195,7 +195,7 @@ void BinaryWithGravitationalWavesVariables<DataType>::operator()(
 template <typename DataType>
 void BinaryWithGravitationalWavesVariables<DataType>::operator()(
     const gsl::not_null<tnsr::ii<DataType, 3>*> past_term,
-    const gsl::not_null<Cache*> /*cache*/,
+    const gsl::not_null<Cache*> cache,
     detail::Tags::PastTerm<DataType> /*meta*/) const {
   DataType present_time(get_size(get<0>(x)), max_time_interpolator);
   const auto past_term_aux = get_past_past_term(present_time);
@@ -1275,93 +1275,126 @@ BinaryWithGravitationalWavesVariables<DataType>::get_past_past_term(
   tnsr::ii<DataType, 3> past_term_past{t.size()};
   for (size_t i = 0; i < 3; ++i) {
     for (size_t j = 0; j <= i; ++j) {
-      past_term_past.get(i, j) =
-          -1. / (distance_left_at_retarded_time_left) *
-              (4. * u1_1.get(i) * u1_1.get(j) +
-               (2. * get(dot_product(u1_1, u1_1)) +
-                2. * get(dot_product(u1_1, normal_left_at_retarded_time_left)) *
-                    get(dot_product(u1_1, normal_left_at_retarded_time_left))) *
-                   normal_left_at_retarded_time_left.get(i) *
-                   normal_left_at_retarded_time_left.get(j) -
-               4. * get(dot_product(u1_1, normal_left_at_retarded_time_left)) *
-                   (normal_left_at_retarded_time_left.get(i) * u1_1.get(j) +
-                    normal_left_at_retarded_time_left.get(j) * u1_1.get(i))) -
-          1. / (distance_right_at_retarded_time_right) *
-              (4. * u1_2.get(i) * u1_2.get(j) +
-               (2. * get(dot_product(u1_2, u1_2)) +
-                2. *
-                    get(dot_product(u1_2,
-                                    normal_right_at_retarded_time_right)) *
-                    get(dot_product(u1_2,
-                                    normal_right_at_retarded_time_right))) *
-                   normal_right_at_retarded_time_right.get(i) *
-                   normal_right_at_retarded_time_right.get(j) -
-               4. *
-                   get(dot_product(u1_2, normal_right_at_retarded_time_right)) *
-                   (normal_right_at_retarded_time_right.get(i) * u1_2.get(j) +
-                    normal_right_at_retarded_time_right.get(j) * u1_2.get(i))) -
-          1. / (distance_left_at_retarded_time_left) *
-              (4. * u2_1.get(i) * u2_1.get(j) +
-               (2. * get(dot_product(u2_1, u2_1)) +
-                2. * get(dot_product(u2_1, normal_left_at_retarded_time_left)) *
-                    get(dot_product(u2_1, normal_left_at_retarded_time_left))) *
-                   normal_left_at_retarded_time_left.get(i) *
-                   normal_left_at_retarded_time_left.get(j) -
-               4. * get(dot_product(u2_1, normal_left_at_retarded_time_left)) *
-                   (normal_left_at_retarded_time_left.get(i) * u2_1.get(j) +
-                    normal_left_at_retarded_time_left.get(j) * u2_1.get(i))) -
-          1. / (distance_right_at_retarded_time_right) *
-              (4. * u2_2.get(i) * u2_2.get(j) +
-               (2. * get(dot_product(u2_2, u2_2)) +
-                2. *
-                    get(dot_product(u2_2,
-                                    normal_right_at_retarded_time_right)) *
-                    get(dot_product(u2_2,
-                                    normal_right_at_retarded_time_right))) *
-                   normal_right_at_retarded_time_right.get(i) *
-                   normal_right_at_retarded_time_right.get(j) -
-               4. *
-                   get(dot_product(u2_2, normal_right_at_retarded_time_right)) *
-                   (normal_right_at_retarded_time_right.get(i) * u2_2.get(j) +
-                    normal_right_at_retarded_time_right.get(j) * u2_2.get(i)));
+      radiative_term->get(i, j) += integral_term.get(i, j);
     }
-    past_term_past.get(i, i) +=
-        -1. / (distance_left_at_retarded_time_left) *
-            (-2. * get(dot_product(u1_1, u1_1)) +
-             2. * get(dot_product(u1_1, normal_left_at_retarded_time_left)) *
-                 get(dot_product(u1_1, normal_left_at_retarded_time_left))) -
-        1. / (distance_right_at_retarded_time_right) *
-            (-2. * get(dot_product(u1_2, u1_2)) +
-             2. * get(dot_product(u1_2, normal_right_at_retarded_time_right)) *
-                 get(dot_product(u1_2, normal_right_at_retarded_time_right))) -
-        1. / (distance_left_at_retarded_time_left) *
-            (-2. * get(dot_product(u2_1, u2_1)) +
-             2. * get(dot_product(u2_1, normal_left_at_retarded_time_left)) *
-                 get(dot_product(u2_1, normal_left_at_retarded_time_left))) -
-        1. / (distance_right_at_retarded_time_right) *
-            (-2. * get(dot_product(u2_2, u2_2)) +
-             2. * get(dot_product(u2_2, normal_right_at_retarded_time_right)) *
-                 get(dot_product(u2_2, normal_right_at_retarded_time_right)));
+    present_term_past.get(i, i) +=
+        -0.25 / get(distance_left_past) *
+            (get(dot_product(u1_1, u1_1)) -
+             5. * get(dot_product(u1_1, normal_left_past)) *
+                 get(dot_product(u1_1, normal_left_past)) +
+             get(dot_product(u2, u2)) -
+             5. * get(dot_product(u2, normal_left_past)) *
+                 get(dot_product(u2, normal_left_past))) -
+        0.25 / get(distance_right_past) *
+            (get(dot_product(u1_2, u1_2)) -
+             5. * get(dot_product(u1_2, normal_right_past)) *
+                 get(dot_product(u1_2, normal_right_past)) +
+             get(dot_product(u2, u2)) -
+             5. * get(dot_product(u2, normal_right_past)) *
+                 get(dot_product(u2, normal_right_past)));
   }
-  return past_term_past;
+  return present_term_past;
 }
 
 template <typename DataType>
-tnsr::ii<DataType, 3>
-BinaryWithGravitationalWavesVariables<DataType>::get_past_integral_term(
-    DataType t) const {
-  const auto retarded_time_left_past = find_retarded_time_left(t);
-  const auto retarded_time_right_past = find_retarded_time_right(t);
-  const auto t0 = t[0];
-  tnsr::ii<DataType, 3> integral_term_past{t.size()};
-  for (size_t i = 0; i < 3; ++i) {
-    for (size_t j = 0; j <= i; ++j) {
-      integral_term_past.get(i, j) =
-          integrate_term(retarded_time_left_past, i, j, -1, t0) +
-          integrate_term(retarded_time_right_past, i, j, 1, t0);
+Scalar<DataType>
+BinaryWithGravitationalWavesVariables<DataType>::get_past_distance_right(
+    const DataType time) const {
+  tnsr::I<DataType, 3> v = x;
+  for (size_t i = 0; i < time.size(); ++i) {
+    for (size_t j = 0; j < 3; ++j) {
+      v.get(j)[i] = x.get(j)[i] - interpolation_position_right.at(j)(time[i]);
     }
   }
-  return integral_term_past;
+  return magnitude(v);
+}
+
+template <typename DataType>
+Scalar<DataType>
+BinaryWithGravitationalWavesVariables<DataType>::get_past_separation(
+    const DataType time) const {
+  tnsr::I<DataType, 3> v = x;
+  for (size_t i = 0; i < time.size(); ++i) {
+    for (size_t j = 0; j < 3; ++j) {
+      v.get(j)[i] = interpolation_position_right.at(j)(time[i]) -
+                    interpolation_position_left.at(j)(time[i]);
+    }
+  }
+  return magnitude(v);
+}
+
+template <typename DataType>
+tnsr::I<DataType, 3>
+BinaryWithGravitationalWavesVariables<DataType>::get_past_momentum_left(
+    const DataType time) const {
+  tnsr::I<DataType, 3> v = x;
+  for (size_t i = 0; i < time.size(); ++i) {
+    for (size_t j = 0; j < 3; ++j) {
+      v.get(j)[i] = interpolation_momentum_left.at(j)(time[i]);
+    }
+  }
+  return v;
+}
+
+template <typename DataType>
+tnsr::I<DataType, 3>
+BinaryWithGravitationalWavesVariables<DataType>::get_past_momentum_right(
+    const DataType time) const {
+  tnsr::I<DataType, 3> v = x;
+  for (size_t i = 0; i < time.size(); ++i) {
+    for (size_t j = 0; j < 3; ++j) {
+      v.get(j)[i] = interpolation_momentum_right.at(j)(time[i]);
+    }
+  }
+  return v;
+}
+
+template <typename DataType>
+tnsr::I<DataType, 3>
+BinaryWithGravitationalWavesVariables<DataType>::get_past_normal_left(
+    const DataType time) const {
+  tnsr::I<DataType, 3> v = x;
+  Scalar<DataType> distance_left = get_past_distance_left(time);
+  for (size_t i = 0; i < time.size(); ++i) {
+    for (size_t j = 0; j < 3; ++j) {
+      v.get(j)[i] = (x.get(j)[i] - interpolation_position_left.at(j)(time[i])) /
+                    get(distance_left)[i];
+    }
+  }
+  return v;
+}
+
+template <typename DataType>
+tnsr::I<DataType, 3>
+BinaryWithGravitationalWavesVariables<DataType>::get_past_normal_right(
+    const DataType time) const {
+  tnsr::I<DataType, 3> v = x;
+  Scalar<DataType> distance_right = get_past_distance_right(time);
+  for (size_t i = 0; i < time.size(); ++i) {
+    for (size_t j = 0; j < 3; ++j) {
+      v.get(j)[i] =
+          (x.get(j)[i] - interpolation_position_right.at(j)(time[i])) /
+          get(distance_right)[i];
+    }
+  }
+
+  return v;
+}
+
+template <typename DataType>
+tnsr::I<DataType, 3>
+BinaryWithGravitationalWavesVariables<DataType>::get_past_normal_lr(
+    const DataType time) const {
+  tnsr::I<DataType, 3> v = x;
+  Scalar<DataType> past_separation = get_past_separation(time);
+  for (size_t i = 0; i < time.size(); ++i) {
+    for (size_t j = 0; j < 3; ++j) {
+      v.get(j)[i] = (interpolation_position_left.at(j)(time[i]) -
+                     interpolation_position_right.at(j)(time[i])) /
+                    get(past_separation)[i];
+    }
+  }
+  return v;
 }
 
 template class BinaryWithGravitationalWavesVariables<DataVector>;
