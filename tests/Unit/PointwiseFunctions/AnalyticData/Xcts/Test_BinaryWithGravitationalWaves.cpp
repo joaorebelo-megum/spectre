@@ -286,7 +286,6 @@ SPECTRE_TEST_CASE(
   pypp::SetupLocalPythonEnvironment local_python_env{
       "PointwiseFunctions/AnalyticData/Xcts"};
   test_data(1.1, .9, -4.5, 10.2, .99, 21., false,
-  test_data(1.1, .9, -4.5, 10.2, .99, 21., false,
             "BinaryWithGravitationalWaves:\n"
             "  MassLeft: 1.1\n"
             "  MassRight: .9\n"
