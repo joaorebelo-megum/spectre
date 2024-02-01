@@ -126,7 +126,7 @@ struct Metavariables {
         Xcts::Solutions::all_analytic_solutions,
         Xcts::AnalyticData::Binary<elliptic::analytic_data::AnalyticSolution,
                                    Xcts::Solutions::all_analytic_solutions>,
-        elliptic::analytic_data::NumericData>,
+        elliptic::analytic_data::NumericData,
         Xcts::AnalyticData::BinaryWithGravitationalWaves>;
 
     using factory_classes = tmpl::map<
