@@ -155,9 +155,7 @@ struct BinaryWithGravitationalWavesVariables
       const double local_xcoord_right, const double local_ymomentum_left,
       const double local_ymomentum_right,
       const double local_attenuation_parameter)
-      : Base(local_mesh, local_inv_jacobian),
-        mesh(std::move(local_mesh)),
-        inv_jacobian(std::move(local_inv_jacobian)),
+      : Base(std::move(local_mesh), std::move(local_inv_jacobian)),
         x(local_x),
         mass_left(local_mass_left),
         mass_right(local_mass_right),
@@ -165,12 +163,14 @@ struct BinaryWithGravitationalWavesVariables
         xcoord_right(local_xcoord_right),
         ymomentum_left(local_ymomentum_left),
         ymomentum_right(local_ymomentum_right),
-        attenuation_parameter(local_attenuation_parameter) {}
-
-  std::optional<std::reference_wrapper<const Mesh<Dim>>> mesh;
-  std::optional<std::reference_wrapper<const InverseJacobian<
-      DataType, Dim, Frame::ElementLogical, Frame::Inertial>>>
-      inv_jacobian;
+        attenuation_parameter(local_attenuation_parameter) {
+    momentum_left.get(0) = 0.;
+    momentum_left.get(1) = ymomentum_left;
+    momentum_left.get(2) = 0.;
+    momentum_right.get(0) = 0.;
+    momentum_right.get(1) = ymomentum_right;
+    momentum_right.get(2) = 0.;
+  }
 
   const tnsr::I<DataType, 3>& x;
   const double mass_left;
@@ -182,8 +182,8 @@ struct BinaryWithGravitationalWavesVariables
   const double attenuation_parameter;
   const double separation = xcoord_right - xcoord_left;
   const std::array<double, 3> normal_lr{{-1., 0., 0.}};
-  const std::array<double, 3> momentum_left{{0., ymomentum_left, 0.}};
-  const std::array<double, 3> momentum_right{{0., ymomentum_right, 0.}};
+  tnsr::I<DataType, 3> momentum_left = x;
+  tnsr::I<DataType, 3> momentum_right = x;
 
   void operator()(gsl::not_null<Scalar<DataType>*> distance_left,
                   gsl::not_null<Cache*> cache,
@@ -279,7 +279,7 @@ struct BinaryWithGravitationalWavesVariables
                       DataType, Dim, Frame::Inertial> /*meta*/) const override;
   void operator()(
       gsl::not_null<tnsr::iJ<DataType, Dim>*> deriv_shift_background,
-      gsl::not_null<Cache*> cache,
+      gsl::not_null<Cache*> /*cache*/,
       ::Tags::deriv<Xcts::Tags::ShiftBackground<DataType, Dim, Frame::Inertial>,
                     tmpl::size_t<Dim>, Frame::Inertial> /*meta*/) const;
   void operator()(
@@ -341,10 +341,6 @@ struct BinaryWithGravitationalWavesVariables
   void add_integral_term_to_radiative(
       gsl::not_null<tnsr::ii<DataType, Dim>*> radiative_term,
       gsl::not_null<Cache*> cache) const;
-  Scalar<DataType> this_dot_product(const tnsr::I<DataType, 3>& a,
-                                    const std::array<double, 3>& b) const;
-  Scalar<DataType> this_dot_product(const std::array<double, 3>& a,
-                                    const tnsr::I<DataType, 3>& b) const;
 };
 
 }  // namespace detail
