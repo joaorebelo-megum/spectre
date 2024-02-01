@@ -6,8 +6,6 @@
 #include <array>
 #include <limits>
 #include <optional>
-#include <vector>
-#include <vector>
 
 #include "DataStructures/CachedTempBuffer.hpp"
 #include "DataStructures/DataBox/Prefixes.hpp"
@@ -90,22 +88,6 @@ template <typename DataType>
 struct PostNewtonianExtrinsicCurvature : db::SimpleTag {
   using type = tnsr::ii<DataType, 3>;
 };
-template <typename DataType>
-struct RetardedTimeLeft : db::SimpleTag {
-  using type = Scalar<DataType>;
-};
-template <typename DataType>
-struct RetardedTimeRight : db::SimpleTag {
-  using type = Scalar<DataType>;
-};
-template <typename DataType>
-struct RootFinderBracketTimeLower : db::SimpleTag {
-  using type = Scalar<DataType>;
-};
-template <typename DataType>
-struct RootFinderBracketTimeUpper : db::SimpleTag {
-  using type = Scalar<DataType>;
-};
 }  // namespace Tags
 
 template <typename DataType>
@@ -140,10 +122,6 @@ using BinaryWithGravitationalWavesVariablesCache =
             detail::Tags::IntegralTerm<DataType>,
             detail::Tags::PostNewtonianConjugateMomentum3<DataType>,
             detail::Tags::PostNewtonianExtrinsicCurvature<DataType>,
-            detail::Tags::RetardedTimeLeft<DataType>,
-            detail::Tags::RetardedTimeRight<DataType>,
-            detail::Tags::RootFinderBracketTimeLower<DataType>,
-            detail::Tags::RootFinderBracketTimeUpper<DataType>,
             ::Tags::deriv<
                 Xcts::Tags::ShiftBackground<DataType, 3, Frame::Inertial>,
                 tmpl::size_t<3>, Frame::Inertial>,
@@ -176,19 +154,8 @@ struct BinaryWithGravitationalWavesVariables
       const double local_mass_right, const double local_xcoord_left,
       const double local_xcoord_right, const double local_ymomentum_left,
       const double local_ymomentum_right,
-      const double local_attenuation_parameter,
-      const std::array<std::vector<double>, 3>& local_past_position_left,
-      const std::array<std::vector<double>, 3>& local_past_position_right,
-      const std::array<std::vector<double>, 3>& local_past_dt_position_left,
-      const std::array<std::vector<double>, 3>& local_past_dt_position_right,
-      const std::array<std::vector<double>, 3>& local_past_momentum_left,
-      const std::array<std::vector<double>, 3>& local_past_momentum_right,
-      const std::array<std::vector<double>, 3>& local_past_dt_momentum_left,
-      const std::array<std::vector<double>, 3>& local_past_dt_momentum_right,
-      const std::vector<double>& local_past_time)
+      const double local_attenuation_parameter)
       : Base(std::move(local_mesh), std::move(local_inv_jacobian)),
-        mesh(std::move(local_mesh)),
-        inv_jacobian(std::move(local_inv_jacobian)),
         x(local_x),
         mass_left(local_mass_left),
         mass_right(local_mass_right),
@@ -196,23 +163,14 @@ struct BinaryWithGravitationalWavesVariables
         xcoord_right(local_xcoord_right),
         ymomentum_left(local_ymomentum_left),
         ymomentum_right(local_ymomentum_right),
-        attenuation_parameter(local_attenuation_parameter),
-        past_position_left(local_past_position_left),
-        past_position_right(local_past_position_right),
-        past_dt_position_left(local_past_dt_position_left),
-        past_dt_position_right(local_past_dt_position_right),
-        past_momentum_left(local_past_momentum_left),
-        past_momentum_right(local_past_momentum_right),
-        past_dt_momentum_left(local_past_dt_momentum_left),
-        past_dt_momentum_right(local_past_dt_momentum_right),
-        past_time(local_past_time) {
-    interpolate_past_history();
+        attenuation_parameter(local_attenuation_parameter) {
+    momentum_left.get(0) = 0.;
+    momentum_left.get(1) = ymomentum_left;
+    momentum_left.get(2) = 0.;
+    momentum_right.get(0) = 0.;
+    momentum_right.get(1) = ymomentum_right;
+    momentum_right.get(2) = 0.;
   }
-
-  std::optional<std::reference_wrapper<const Mesh<Dim>>> mesh;
-  std::optional<std::reference_wrapper<const InverseJacobian<
-      DataType, Dim, Frame::ElementLogical, Frame::Inertial>>>
-      inv_jacobian;
 
   const tnsr::I<DataType, 3>& x;
   const double mass_left;
@@ -224,23 +182,8 @@ struct BinaryWithGravitationalWavesVariables
   const double attenuation_parameter;
   const double separation = xcoord_right - xcoord_left;
   const std::array<double, 3> normal_lr{{-1., 0., 0.}};
-  const std::array<double, 3> momentum_left{{0., ymomentum_left, 0.}};
-  const std::array<double, 3> momentum_right{{0., ymomentum_right, 0.}};
-
-  const std::array<std::vector<double>, 3>& past_position_left{};
-  const std::array<std::vector<double>, 3>& past_position_right{};
-  const std::array<std::vector<double>, 3>& past_dt_position_left{};
-  const std::array<std::vector<double>, 3>& past_dt_position_right{};
-  const std::array<std::vector<double>, 3>& past_momentum_left{};
-  const std::array<std::vector<double>, 3>& past_momentum_right{};
-  const std::array<std::vector<double>, 3>& past_dt_momentum_left{};
-  const std::array<std::vector<double>, 3>& past_dt_momentum_right{};
-  const std::vector<double>& past_time{};
-
-  std::array<std::function<double(double)>, 3> interpolation_position_left{};
-  std::array<std::function<double(double)>, 3> interpolation_position_right{};
-  std::array<std::function<double(double)>, 3> interpolation_momentum_left{};
-  std::array<std::function<double(double)>, 3> interpolation_momentum_right{};
+  tnsr::I<DataType, 3> momentum_left = x;
+  tnsr::I<DataType, 3> momentum_right = x;
 
   void operator()(gsl::not_null<Scalar<DataType>*> distance_left,
                   gsl::not_null<Cache*> cache,
@@ -303,20 +246,6 @@ struct BinaryWithGravitationalWavesVariables
       gsl::not_null<tnsr::ii<DataType, Dim>*> pn_extrinsic_curvature,
       gsl::not_null<Cache*> cache,
       detail::Tags::PostNewtonianExtrinsicCurvature<DataType> /*meta*/) const;
-  void operator()(gsl::not_null<Scalar<DataType>*> retarded_time_left,
-                  gsl::not_null<Cache*> cache,
-                  detail::Tags::RetardedTimeLeft<DataType> /*meta*/) const;
-  void operator()(gsl::not_null<Scalar<DataType>*> retarded_time_right,
-                  gsl::not_null<Cache*> cache,
-                  detail::Tags::RetardedTimeRight<DataType> /*meta*/) const;
-  void operator()(
-      gsl::not_null<Scalar<DataType>*> rootfinder_bracket_time_lower,
-      gsl::not_null<Cache*> /*cache*/,
-      detail::Tags::RootFinderBracketTimeLower<DataType> /*meta*/) const;
-  void operator()(
-      gsl::not_null<Scalar<DataType>*> rootfinder_bracket_time_upper,
-      gsl::not_null<Cache*> /*cache*/,
-      detail::Tags::RootFinderBracketTimeUpper<DataType> /*meta*/) const;
 
   void operator()(
       gsl::not_null<tnsr::ii<DataType, Dim>*> conformal_metric,
@@ -412,23 +341,6 @@ struct BinaryWithGravitationalWavesVariables
   void add_integral_term_to_radiative(
       gsl::not_null<tnsr::ii<DataType, Dim>*> radiative_term,
       gsl::not_null<Cache*> cache) const;
-  Scalar<DataType> this_dot_product(const tnsr::I<DataType, 3>& a,
-                                    const std::array<double, 3>& b) const;
-  Scalar<DataType> this_dot_product(const std::array<double, 3>& a,
-                                    const tnsr::I<DataType, 3>& b) const;
-  double max_time_interpolator = std::numeric_limits<double>::signaling_NaN();
-  void interpolate_past_history();
-  DataType find_retarded_time_left(gsl::not_null<Cache*> cache) const;
-  DataType find_retarded_time_right(gsl::not_null<Cache*> cache) const;
-  Scalar<DataType> get_past_distance_left(DataType t) const;
-  Scalar<DataType> get_past_distance_right(DataType t) const;
-  Scalar<DataType> get_past_separation(DataType t) const;
-  tnsr::I<DataType, 3> get_past_momentum_left(DataType t) const;
-  tnsr::I<DataType, 3> get_past_momentum_right(DataType t) const;
-  tnsr::I<DataType, 3> get_past_normal_left(DataType t) const;
-  tnsr::I<DataType, 3> get_past_normal_right(DataType t) const;
-  tnsr::I<DataType, 3> get_past_normal_lr(DataType t) const;
-  DataType integrate_term(DataType t, size_t i, size_t j, int left_right) const;
 };
 
 }  // namespace detail
@@ -437,6 +349,8 @@ struct BinaryWithGravitationalWavesVariables
  * \brief   Binary black hole initial data with realistic wave background,
  * constructed in Post-Newtonian approximations.
  *
+ * This class implements background data for the XCTS equations describing
+ * a binary black hole system with a realistic gravitational wave content.
  * The main goal of this implementation is to improve the extracted
  * wave forms, for example, by minimizing junk radiation.
  * The data is only valid for black holes without spin. Even so, there is some
@@ -537,8 +451,9 @@ struct BinaryWithGravitationalWavesVariables
  * (\vec{u}\cdot\hat{n}_a) u^{(i}n_a^{j)} + [-5 u^2 + 35(\vec{u} \cdot
  * \hat{n}_a)^2 ]  n_a^i n_a^j\Bigr\}. \nonumber \f}
  *
- * \warning The integral term, equation \f$\eqref{eq:integral_term}\f$, is not
- * implemented yet. Instead this term is set to zero.
+ * \warning The retarded and integral terms, equations
+ * \f$\eqref{eq:retarded_term}\f$ and \f$\eqref{eq:integral_term}\f$, are not
+ * implemented yet. Instead these terms are set to zero.
  *
  * With this the whole spatial metric is computed up to \f$4PN\f$ order and the
  * radiative term agrees well with quadrupole predictions. In \cite Tichy2002ec,
@@ -558,29 +473,6 @@ struct BinaryWithGravitationalWavesVariables
  *
  * \warning The class is still being worked on. The Solver was not tested yet,
  * for now we still see a very slow convergence.
- *
- * To be able to calculate equations \f$\eqref{eq:retarded_term}\f$ and
- * \f$\eqref{eq:integral_term}\f$ we need to look into the past history
- * of the binary at least up to the time were the generated wave can reach the
- * furthest point on the grid. To do so we must evolve the binary backward in
- * time. Because we are only looking into the inspiral phase we can follow a
- * simple Hamiltonian evolution computed in Post-Newtonian orders. The
- * equations to be solved are
- *
- * \f{equation}{
- * \frac{d X^i}{d t}=\frac{\partial H}{\partial P_i}
- * \f}
- *
- * and
- *
- * \f{equation}{
- * \frac{d P_i}{d t}=-\frac{\partial H}{\partial X^i}+F_i,
- * \f}
- *
- * where $H$ is the Post-Newtonian Hamiltonian, $X^i$ is the separation
- * vector between the two particles, $P_i$ is the momentum of one particle
- * in the center of mass frame and $F_i$ is the radiation-reaction flux term.
- * The Post-Newtonian Hamiltonian is given in \cite Buonanno2005xu.
  */
 class BinaryWithGravitationalWaves
     : public elliptic::analytic_data::Background,
@@ -609,19 +501,8 @@ class BinaryWithGravitationalWaves
         "The parameter controlling the width of the attenuation function.";
     using type = double;
   };
-  struct OuterRadius {
-    static constexpr Options::String help =
-        "The radius of the outer boundary of the computational domain.";
-    using type = double;
-  };
-  struct WriteEvolutionOption {
-    static constexpr Options::String help =
-        "Option to write the evolution of the past history to a file.";
-    using type = bool;
-  };
-  using options =
-      tmpl::list<MassLeft, MassRight, XCoordsLeft, XCoordsRight,
-                 AttenuationParameter, OuterRadius, WriteEvolutionOption>;
+  using options = tmpl::list<MassLeft, MassRight, XCoordsLeft, XCoordsRight,
+                             AttenuationParameter>;
   static constexpr Options::String help =
       "Binary black hole initial data with realistic wave background, "
       "constructed in Post-Newtonian approximations. ";
@@ -638,16 +519,13 @@ class BinaryWithGravitationalWaves
   BinaryWithGravitationalWaves(double mass_left, double mass_right,
                                double xcoord_left, double xcoord_right,
                                double attenuation_parameter,
-                               double outer_radius, bool write_evolution_option,
                                const Options::Context& context = {})
       : mass_left_(mass_left),
         mass_right_(mass_right),
         xcoord_left_(xcoord_left),
         xcoord_right_(xcoord_right),
-        attenuation_parameter_(attenuation_parameter),
-        outer_radius_(outer_radius),
-        write_evolution_option_(write_evolution_option) {
-    if (mass_left_ < 0. or mass_right_ < 0.) {
+        attenuation_parameter_(attenuation_parameter) {
+    if (mass_left_ <= 0. or mass_right_ <= 0.) {
       PARSE_ERROR(context, "'MassLeft' and 'MassRight' need to be positive.");
     }
     if (xcoord_left_ >= xcoord_right_) {
@@ -657,16 +535,7 @@ class BinaryWithGravitationalWaves
     if (attenuation_parameter_ < 0.) {
       PARSE_ERROR(context, "'AttenuationParameter' must be positive.");
     }
-    if (outer_radius_ <= 0.) {
-      PARSE_ERROR(context, "'OuterRadius' must be positive.");
-    }
-
-    // Set the past history data
     initialize();
-    reserve_vector_capacity();
-    integrate_hamiltonian_system();
-    write_evolution_to_file();
-    reverse_vector();
   }
 
   explicit BinaryWithGravitationalWaves(CkMigrateMessage* m)
@@ -707,33 +576,6 @@ class BinaryWithGravitationalWaves
     p | ymomentum_left_;
     p | ymomentum_right_;
     p | attenuation_parameter_;
-    p | write_evolution_option_;
-    p | outer_radius_;
-    for (auto& vec : past_position_left_) {
-      p | vec;
-    }
-    for (auto& vec : past_position_right_) {
-      p | vec;
-    }
-    for (auto& vec : past_dt_position_left_) {
-      p | vec;
-    }
-    for (auto& vec : past_dt_position_right_) {
-      p | vec;
-    }
-    for (auto& vec : past_momentum_left_) {
-      p | vec;
-    }
-    for (auto& vec : past_momentum_right_) {
-      p | vec;
-    }
-    for (auto& vec : past_dt_momentum_left_) {
-      p | vec;
-    }
-    for (auto& vec : past_dt_momentum_right_) {
-      p | vec;
-    }
-    p | past_time_;
   }
 
   double mass_left() const { return mass_left_; }
@@ -741,8 +583,6 @@ class BinaryWithGravitationalWaves
   double xcoord_left() const { return xcoord_left_; }
   double xcoord_right() const { return xcoord_right_; }
   double attenuation_parameter() const { return attenuation_parameter_; }
-  double outer_radius() const { return outer_radius_; }
-  bool write_evolution_option() const { return write_evolution_option_; }
 
  private:
   double mass_left_ = std::numeric_limits<double>::signaling_NaN();
@@ -752,8 +592,6 @@ class BinaryWithGravitationalWaves
   double ymomentum_left_ = std::numeric_limits<double>::signaling_NaN();
   double ymomentum_right_ = std::numeric_limits<double>::signaling_NaN();
   double attenuation_parameter_ = std::numeric_limits<double>::signaling_NaN();
-  double outer_radius_ = std::numeric_limits<double>::signaling_NaN();
-  bool write_evolution_option_ = true;
 
   double total_mass = 0.;
   double reduced_mass = 0.;
@@ -779,57 +617,12 @@ class BinaryWithGravitationalWaves
                                 xcoord_right_,
                                 ymomentum_left_,
                                 ymomentum_right_,
-                                attenuation_parameter_,
-                                past_position_left_,
-                                past_position_right_,
-                                past_dt_position_left_,
-                                past_dt_position_right_,
-                                past_momentum_left_,
-                                past_momentum_right_,
-                                past_dt_momentum_left_,
-                                past_dt_momentum_right_,
-                                past_time_};
+                                attenuation_parameter_};
 
     return {cache.get_var(computer, RequestedTags{})...};
   }
 
-  // Implementation of the past history evolution
-  double total_mass = 0.;
-  double reduced_mass = 0.;
-  double reduced_mass_over_total_mass = 0.;
-  std::array<double, 3> initial_state_position{};
-  std::array<double, 3> initial_state_momentum{};
-
-  std::array<std::vector<double>, 3> past_position_left_{};
-  std::array<std::vector<double>, 3> past_position_right_{};
-  std::array<std::vector<double>, 3> past_dt_position_left_{};
-  std::array<std::vector<double>, 3> past_dt_position_right_{};
-  std::array<std::vector<double>, 3> past_momentum_left_{};
-  std::array<std::vector<double>, 3> past_momentum_right_{};
-  std::array<std::vector<double>, 3> past_dt_momentum_left_{};
-  std::array<std::vector<double>, 3> past_dt_momentum_right_{};
-  std::vector<double> past_time_{};
-  void reserve_vector_capacity();
-  void reverse_vector();
-
-  double initial_time = 0.;
-  double final_time = 0.;
-  double time_step = 0.;
-  size_t number_of_steps = 0;
-
   void initialize();
-
-  using state_type = std::array<double, 6>;
-
-  // Hamiltonian system
-  void hamiltonian_system(const state_type& x, state_type& dpdt) const;
-
-  // Observer: store state in vectors
-  void observer_vector(const state_type& x, double t);
-
-  // Integration of the Hamiltonian system
-  void integrate_hamiltonian_system();
-  void write_evolution_to_file() const;
 };
 
 }  // namespace Xcts::AnalyticData
