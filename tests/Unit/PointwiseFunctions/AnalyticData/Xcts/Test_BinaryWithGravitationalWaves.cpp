@@ -7,6 +7,9 @@
 #include <optional>
 #include <string>
 
+#include <chrono>    // >>>> TEST !!!!!!
+#include <iostream>  // >>>> TEST !!!!!!
+
 #include "DataStructures/DataBox/PrefixHelpers.hpp"
 #include "DataStructures/DataBox/Prefixes.hpp"
 #include "DataStructures/DataVector.hpp"
@@ -294,6 +297,11 @@ SPECTRE_TEST_CASE(
             "  AttenuationParameter: .99\n"
             "  OuterRadius: 21.\n"
             "  WriteEvolutionOption: False");
+  auto stop = std::chrono::high_resolution_clock::now();  // >>>> TEST !!!!!!
+  auto duration = std::chrono::duration_cast<std::chrono::microseconds>(
+      stop - start);  // >>>> TEST !!!!!!
+  std::cout << "Duration >>>> " << duration.count() << " microseconds !"
+            << std::endl;  // >>>> TEST !!!!!!
 }
 
 }  // namespace Xcts::AnalyticData
