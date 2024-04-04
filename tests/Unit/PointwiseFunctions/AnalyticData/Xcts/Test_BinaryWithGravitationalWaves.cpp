@@ -7,6 +7,9 @@
 #include <optional>
 #include <string>
 
+#include <chrono>    // >>>> TEST !!!!!!
+#include <iostream>  // >>>> TEST !!!!!!
+
 #include "DataStructures/DataBox/PrefixHelpers.hpp"
 #include "DataStructures/DataBox/Prefixes.hpp"
 #include "DataStructures/DataVector.hpp"
@@ -72,13 +75,14 @@ using test_tags_exact = tmpl::list<
     gr::Tags::Conformal<gr::Tags::StressTrace<DataVector>, 0>,
     gr::Tags::Conformal<gr::Tags::MomentumDensity<DataVector, 3>, 0>>;
 
-using test_tags_numeric = tmpl::list<
-    detail::Tags::RetardedTimeLeft<DataVector>,
-    detail::Tags::RetardedTimeRight<DataVector>,
-    detail::Tags::PastTerm<DataVector>,
-    detail::Tags::RadiativeTerm<DataVector>,
-    Tags::ConformalMetric<DataVector, 3, Frame::Inertial>,
-    gr::Tags::TraceExtrinsicCurvature<DataVector>>;
+using test_tags_numeric =
+    tmpl::list<detail::Tags::RetardedTimeLeft<DataVector>,
+               detail::Tags::RetardedTimeRight<DataVector>,
+               detail::Tags::PastTerm<DataVector>,
+               detail::Tags::IntegralTerm<DataVector>,
+               detail::Tags::RadiativeTerm<DataVector>,
+               Tags::ConformalMetric<DataVector, 3, Frame::Inertial>,
+               gr::Tags::TraceExtrinsicCurvature<DataVector>>;
 
 struct BinaryWithGravitationalWavesProxyExact {
   tuples::tagged_tuple_from_typelist<test_tags_exact> test_variables(
@@ -254,7 +258,8 @@ void test_data(const double mass_left, const double mass_right,
         &BinaryWithGravitationalWavesProxyNumeric::test_variables, proxy,
         "BinaryWithGravitationalWaves",
         {"retarded_time_left", "retarded_time_right", "past_term",
-         "radiative_term", "conformal_metric", "extrinsic_curvature_trace"},
+         "integral_term", "radiative_term", "conformal_metric",
+         "extrinsic_curvature_trace"},
         {{{-10. + xcoord_left, xcoord_right + 10.}}}, std::make_tuple(),
         DataVector(1), 1e-3);
   }
@@ -265,6 +270,7 @@ void test_data(const double mass_left, const double mass_right,
 SPECTRE_TEST_CASE(
     "Unit.PointwiseFunctions.AnalyticData.Xcts.BinaryWithGravitationalWaves",
     "[PointwiseFunctions][Unit]") {
+  auto start = std::chrono::high_resolution_clock::now();  // >>>> TEST !!!!!!
   pypp::SetupLocalPythonEnvironment local_python_env{
       "PointwiseFunctions/AnalyticData/Xcts"};
   test_data(1.1, .9, -4.5, 10.2, .99, 21., false,
@@ -276,6 +282,11 @@ SPECTRE_TEST_CASE(
             "  AttenuationParameter: .99\n"
             "  OuterRadius: 21.\n"
             "  WriteEvolutionOption: False");
+  auto stop = std::chrono::high_resolution_clock::now();  // >>>> TEST !!!!!!
+  auto duration = std::chrono::duration_cast<std::chrono::microseconds>(
+      stop - start);  // >>>> TEST !!!!!!
+  std::cout << "Duration >>>> " << duration.count() << " microseconds !"
+            << std::endl;  // >>>> TEST !!!!!!
 }
 
 }  // namespace Xcts::AnalyticData
