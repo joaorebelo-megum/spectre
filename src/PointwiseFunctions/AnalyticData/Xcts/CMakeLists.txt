@@ -30,6 +30,7 @@ target_link_libraries(
   ErrorHandling
   GeneralRelativity
   Hydro
+  Integration
   LinearOperators
   Options
   Parallel

@@ -2,6 +2,7 @@
 # See LICENSE.txt for details.
 
 import numpy as np
+from scipy import integrate
 from scipy.interpolate import CubicHermiteSpline
 from scipy.optimize import toms748
 
@@ -8288,6 +8289,305 @@ def root_finder_bracket_time_upper(x):
     return time_upper
 
 
+def f_left(time_left, x, i, j):
+    result = np.zeros(len(time_left))
+    for k, t in enumerate(time_left):
+        p1 = np.array(
+            [
+                interpolate_momentum_left[0](t),
+                interpolate_momentum_left[1](t),
+                interpolate_momentum_left[2](t),
+            ]
+        )
+        r1 = np.sqrt(
+            (interpolate_position_left[0](t) - x[0])
+            * (interpolate_position_left[0](t) - x[0])
+            + (interpolate_position_left[1](t) - x[1])
+            * (interpolate_position_left[1](t) - x[1])
+            + (interpolate_position_left[2](t) - x[2])
+            * (interpolate_position_left[2](t) - x[2])
+        )
+        n1 = (
+            np.array(
+                [
+                    x[0] - interpolate_position_left[0](t),
+                    x[1] - interpolate_position_left[1](t),
+                    x[2] - interpolate_position_left[2](t),
+                ]
+            )
+            / r1
+        )
+        m1 = mass_left
+        m2 = mass_right
+        r12 = np.sqrt(
+            (interpolate_position_left[0](t) - interpolate_position_right[0](t))
+            * (
+                interpolate_position_left[0](t)
+                - interpolate_position_right[0](t)
+            )
+            + (
+                interpolate_position_left[1](t)
+                - interpolate_position_right[1](t)
+            )
+            * (
+                interpolate_position_left[1](t)
+                - interpolate_position_right[1](t)
+            )
+            + (
+                interpolate_position_left[2](t)
+                - interpolate_position_right[2](t)
+            )
+            * (
+                interpolate_position_left[2](t)
+                - interpolate_position_right[2](t)
+            )
+        )
+        n = (
+            np.array(
+                [
+                    interpolate_position_left[0](t)
+                    - interpolate_position_right[0](t),
+                    interpolate_position_left[1](t)
+                    - interpolate_position_right[1](t),
+                    interpolate_position_left[2](t)
+                    - interpolate_position_right[2](t),
+                ]
+            )
+            / r12
+        )
+        u1_t = np.array([0.0, 0.0, 0.0])
+        u2_t = np.array([0.0, 0.0, 0.0])
+        for l in range(3):
+            u1_t[l] = p1[l] / np.sqrt(m1)
+            u2_t[l] = np.sqrt(m1 * m2 / (2 * r12)) * n[l]
+        term1 = (
+            t
+            / (r1 * r1 * r1)
+            * (
+                (
+                    -5 * np.dot(u1_t, u1_t)
+                    + 9 * np.dot(u1_t, n1) * np.dot(u1_t, n1)
+                )
+                * delta[i][j]
+                + 6 * u1_t[i] * u1_t[j]
+                - 6 * np.dot(u1_t, n1) * (u1_t[i] * n1[j] + u1_t[j] * n1[i])
+                + (
+                    9 * np.dot(u1_t, u1_t)
+                    - 15 * np.dot(u1_t, n1) * np.dot(u1_t, n1)
+                )
+                * n1[i]
+                * n1[j]
+            )
+        )
+        term2 = (
+            t
+            * t
+            * t
+            / (r1 * r1 * r1 * r1 * r1)
+            * (
+                (np.dot(u1_t, u1_t) - 5 * np.dot(u1_t, n1) * np.dot(u1_t, n1))
+                * delta[i][j]
+                + 2 * u1_t[i] * u1_t[j]
+                - 10 * np.dot(u1_t, n1) * (u1_t[i] * n1[j] + u1_t[j] * n1[i])
+                + (
+                    -5 * np.dot(u1_t, u1_t) * np.dot(u1_t, u1_t)
+                    + 35 * np.dot(u1_t, n1) * np.dot(u1_t, n1)
+                )
+                * n1[i]
+                * n1[j]
+            )
+        )
+        term3 = (
+            t
+            / (r1 * r1 * r1)
+            * (
+                (
+                    -5 * np.dot(u2_t, u2_t)
+                    + 9 * np.dot(u2_t, n1) * np.dot(u2_t, n1)
+                )
+                * delta[i][j]
+                + 6 * u2_t[i] * u2_t[j]
+                - 6 * np.dot(u2_t, n1) * (u2_t[i] * n1[j] + u2_t[j] * n1[i])
+                + (
+                    9 * np.dot(u2_t, u2_t)
+                    - 15 * np.dot(u2_t, n1) * np.dot(u2_t, n1)
+                )
+                * n1[i]
+                * n1[j]
+            )
+        )
+        term4 = (
+            t
+            * t
+            * t
+            / (r1 * r1 * r1 * r1 * r1)
+            * (
+                (np.dot(u2_t, u2_t) - 5 * np.dot(u2_t, n1) * np.dot(u2_t, n1))
+                * delta[i][j]
+                + 2 * u2_t[i] * u2_t[j]
+                - 10 * np.dot(u2_t, n1) * (u2_t[i] * n1[j] + u2_t[j] * n1[i])
+                + (
+                    -5 * np.dot(u2_t, u2_t) * np.dot(u2_t, u2_t)
+                    + 35 * np.dot(u2_t, n1) * np.dot(u2_t, n1)
+                )
+                * n1[i]
+                * n1[j]
+            )
+        )
+        result[k] = term1 + term2 + term3 + term4
+    return result
+
+
+def f_right(time_right, x, i, j):
+    result = np.zeros(len(time_right))
+    for k, t in enumerate(time_right):
+        p2 = np.array(
+            [
+                interpolate_momentum_right[0](t),
+                interpolate_momentum_right[1](t),
+                interpolate_momentum_right[2](t),
+            ]
+        )
+        r2 = np.sqrt(
+            (interpolate_position_right[0](t) - x[0])
+            * (interpolate_position_right[0](t) - x[0])
+            + (interpolate_position_right[1](t) - x[1])
+            * (interpolate_position_right[1](t) - x[1])
+            + (interpolate_position_right[2](t) - x[2])
+            * (interpolate_position_right[2](t) - x[2])
+        )
+        n2 = (
+            np.array(
+                [
+                    x[0] - interpolate_position_right[0](t),
+                    x[1] - interpolate_position_right[1](t),
+                    x[2] - interpolate_position_right[2](t),
+                ]
+            )
+            / r2
+        )
+        m1 = mass_left
+        m2 = mass_right
+        r12 = np.sqrt(
+            (interpolate_position_left[0](t) - interpolate_position_right[0](t))
+            * (
+                interpolate_position_left[0](t)
+                - interpolate_position_right[0](t)
+            )
+            + (
+                interpolate_position_left[1](t)
+                - interpolate_position_right[1](t)
+            )
+            * (
+                interpolate_position_left[1](t)
+                - interpolate_position_right[1](t)
+            )
+            + (
+                interpolate_position_left[2](t)
+                - interpolate_position_right[2](t)
+            )
+            * (
+                interpolate_position_left[2](t)
+                - interpolate_position_right[2](t)
+            )
+        )
+        n = (
+            np.array(
+                [
+                    interpolate_position_left[0](t)
+                    - interpolate_position_right[0](t),
+                    interpolate_position_left[1](t)
+                    - interpolate_position_right[1](t),
+                    interpolate_position_left[2](t)
+                    - interpolate_position_right[2](t),
+                ]
+            )
+            / r12
+        )
+        u1_t = np.array([0.0, 0.0, 0.0])
+        u2_t = np.array([0.0, 0.0, 0.0])
+        for l in range(3):
+            u1_t[l] = p2[l] / np.sqrt(m2)
+            u2_t[l] = np.sqrt(m1 * m2 / (2 * r12)) * n[l]
+        term1 = (
+            t
+            / (r2 * r2 * r2)
+            * (
+                (
+                    -5 * np.dot(u1_t, u1_t)
+                    + 9 * np.dot(u1_t, n2) * np.dot(u1_t, n2)
+                )
+                * delta[i][j]
+                + 6 * u1_t[i] * u1_t[j]
+                - 6 * np.dot(u1_t, n2) * (u1_t[i] * n2[j] + u1_t[j] * n2[i])
+                + (
+                    9 * np.dot(u1_t, u1_t)
+                    - 15 * np.dot(u1_t, n2) * np.dot(u1_t, n2)
+                )
+                * n2[i]
+                * n2[j]
+            )
+        )
+        term2 = (
+            t
+            * t
+            * t
+            / (r2 * r2 * r2 * r2 * r2)
+            * (
+                (np.dot(u1_t, u1_t) - 5 * np.dot(u1_t, n2) * np.dot(u1_t, n2))
+                * delta[i][j]
+                + 2 * u1_t[i] * u1_t[j]
+                - 10 * np.dot(u1_t, n2) * (u1_t[i] * n2[j] + u1_t[j] * n2[i])
+                + (
+                    -5 * np.dot(u1_t, u1_t) * np.dot(u1_t, u1_t)
+                    + 35 * np.dot(u1_t, n2) * np.dot(u1_t, n2)
+                )
+                * n2[i]
+                * n2[j]
+            )
+        )
+        term3 = (
+            t
+            / (r2 * r2 * r2)
+            * (
+                (
+                    -5 * np.dot(u2_t, u2_t)
+                    + 9 * np.dot(u2_t, n2) * np.dot(u2_t, n2)
+                )
+                * delta[i][j]
+                + 6 * u2_t[i] * u2_t[j]
+                - 6 * np.dot(u2_t, n2) * (u2_t[i] * n2[j] + u2_t[j] * n2[i])
+                + (
+                    9 * np.dot(u2_t, u2_t)
+                    - 15 * np.dot(u2_t, n2) * np.dot(u2_t, n2)
+                )
+                * n2[i]
+                * n2[j]
+            )
+        )
+        term4 = (
+            t
+            * t
+            * t
+            / (r2 * r2 * r2 * r2 * r2)
+            * (
+                (np.dot(u2_t, u2_t) - 5 * np.dot(u2_t, n2) * np.dot(u2_t, n2))
+                * delta[i][j]
+                + 2 * u2_t[i] * u2_t[j]
+                - 10 * np.dot(u2_t, n2) * (u2_t[i] * n2[j] + u2_t[j] * n2[i])
+                + (
+                    -5 * np.dot(u2_t, u2_t) * np.dot(u2_t, u2_t)
+                    + 35 * np.dot(u2_t, n2) * np.dot(u2_t, n2)
+                )
+                * n2[i]
+                * n2[j]
+            )
+        )
+
+        result[k] = term1 + term2 + term3 + term4
+    return result
+
+
 def near_zone_term(x):
     r_left = distance_left(x)
     r_right = distance_right(x)
@@ -8765,10 +9065,26 @@ def past_term(x):
     return past_term_aux
 
 
+def integral_term(x):
+    integral_term_aux = np.zeros((3, 3))
+    time_left = np.linspace(retarded_time_left(x), 0.0, 1000)
+    time_right = np.linspace(retarded_time_right(x), 0.0, 1000)
+    for i in range(3):
+        for j in range(3):
+            integral_term_aux[i, j] = integrate.trapezoid(
+                f_left(time_left, x, i, j), x=time_left
+            ) + integrate.trapezoid(f_right(time_right, x, i, j), x=time_right)
+    return integral_term_aux
+
+
 def radiative_term(x):
     return (
-        np.zeros((3, 3)) + near_zone_term(x) + present_term(x) + past_term(x)
-    )  # + integral_term(x)
+        np.zeros((3, 3))
+        + near_zone_term(x)
+        + present_term(x)
+        + past_term(x)
+        + integral_term(x)
+    )
 
 
 def pn_conjugate_momentum3(x):
