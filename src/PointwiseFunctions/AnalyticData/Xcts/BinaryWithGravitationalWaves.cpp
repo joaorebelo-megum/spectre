@@ -195,7 +195,7 @@ void BinaryWithGravitationalWavesVariables<DataType>::operator()(
 template <typename DataType>
 void BinaryWithGravitationalWavesVariables<DataType>::operator()(
     const gsl::not_null<tnsr::ii<DataType, 3>*> past_term,
-    const gsl::not_null<Cache*> cache,
+    const gsl::not_null<Cache*> /*cache*/,
     detail::Tags::PastTerm<DataType> /*meta*/) const {
   DataType present_time(get_size(get<0>(x)), max_time_interpolator);
   const auto past_term_aux = get_past_past_term(present_time);
