@@ -65,8 +65,6 @@ using test_tags_exact = tmpl::list<
     detail::Tags::RootFinderBracketTimeLower<DataVector>,
     detail::Tags::RootFinderBracketTimeUpper<DataVector>,
     Tags::ShiftBackground<DataVector, 3, Frame::Inertial>,
-    Tags::LongitudinalShiftBackgroundMinusDtConformalMetric<DataVector, 3,
-                                                            Frame::Inertial>,
     Tags::ConformalFactorMinusOne<DataVector>,
     gr::Tags::Conformal<gr::Tags::EnergyDensity<DataVector>, 0>,
     gr::Tags::Conformal<gr::Tags::StressTrace<DataVector>, 0>,
