@@ -187,6 +187,7 @@ EventsAndTriggers:
             - TraceExtrinsicCurvature
             - ShiftBackground
             - LongitudinalShiftBackgroundMinusDtConformalMetric
+            - dt(TraceExtrinsicCurvature)
           InterpolateToMesh: None
           CoordinatesFloatingPointType: Double
           FloatingPointTypes: [Double]
