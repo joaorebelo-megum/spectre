@@ -1095,14 +1095,15 @@ DataType BinaryWithGravitationalWavesVariables<DataType>::integrate_term(
     const DataType time, const size_t i, const size_t j,
     const int left_right) const {
   DataType result{x.get(0).size()};
+
   for (size_t k = 0; k < x.get(0).size(); ++k) {
     // double error;
-    using boost::math::quadrature::trapezoidal;
+    // using boost::math::quadrature::trapezoidal;
     // boost::math::quadrature::gauss_kronrod<double, 31> integration;
-    // const integration::GslQuadAdaptive<
-    //     integration::GslIntegralType::StandardGaussKronrod>
-    //     integration{100};
-    result[k] = trapezoidal(
+    const integration::GslQuadAdaptive<
+        integration::GslIntegralType::StandardGaussKronrod>
+        integration{10};
+    result[k] = integration(
         [this, left_right, i, j, k](const double t) {
           std::array<double, 3> u1{};
           std::array<double, 3> u2{};
@@ -1315,9 +1316,9 @@ DataType BinaryWithGravitationalWavesVariables<DataType>::integrate_term(
           return term1 + term2 + term3 + term4;
           // return 0.0;
         },
-        // time[k], 0.0, 1e-8, 4, 1e-10); //for gsl gauss-kronrod
-        // time[k], 0.0, 6, 1e-8, &error); // for boost gauss-kronrod
-        time[k], 0.0, 1e-8);  // for boost trapezoidal with tolerance
+        time[k], 0.0, 100., 0, 1e-6);  // for gsl gauss-kronrod
+    // time[k], 0.0, 6, 1e-8, &error); // for boost gauss-kronrod
+    // time[k], 0.0, 1e-8);  // for boost trapezoidal with tolerance
     // time[k], 0.0); // for boost trapezoidal without tolerance
   }
   return result;
