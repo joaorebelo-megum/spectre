@@ -64,7 +64,7 @@ DomainCreator:
             NegativeExpansion: *bh_left
       UseLogarithmicMap: True
     Envelope:
-      Radius: &outer_shell_inner_radius 100.
+      Radius: &outer_shell_inner_radius 20.
       RadialDistribution: Linear
     OuterShell:
       Radius: *outer_radius
