@@ -1101,231 +1101,132 @@ DataType BinaryWithGravitationalWavesVariables<DataType>::integrate_term(
     const DataType time, const size_t i, const size_t j,
     const int left_right) const {
   DataType result{x.get(0).size()};
+  std::array<std::function<double(double)>, 3> this_interpolation_position{};
+  std::array<std::function<double(double)>, 3> this_interpolation_momentum{};
+  if (left_right == -1) {
+    for (size_t l = 0; l < 3; ++l) {
+      this_interpolation_position.at(l) = interpolation_position_left.at(l);
+      this_interpolation_momentum.at(l) = interpolation_momentum_left.at(l);
+    }
+  } else if (left_right == 1) {
+    for (size_t l = 0; l < 3; ++l) {
+      this_interpolation_position.at(l) = interpolation_position_right.at(l);
+      this_interpolation_momentum.at(l) = interpolation_momentum_right.at(l);
+    }
+  }
 
   for (size_t k = 0; k < x.get(0).size(); ++k) {
-    // double error;
-    // using boost::math::quadrature::trapezoidal;
-    // boost::math::quadrature::gauss_kronrod<double, 31> integration;
     const integration::GslQuadAdaptive<
         integration::GslIntegralType::StandardGaussKronrod>
         integration{10};
     result[k] = integration(
-        [this, left_right, i, j, k](const double t) {
+        [this, i, j, k, &this_interpolation_position,
+         &this_interpolation_momentum](const double t) {
           std::array<double, 3> u1{};
           std::array<double, 3> u2{};
           double term1(0.);
           double term2(0.);
           double term3(0.);
           double term4(0.);
-          if (left_right == -1) {
-            double distance_left_at_t = sqrt(
-                pow(interpolation_position_left.at(0)(t) - x.get(0)[k], 2) +
-                pow(interpolation_position_left.at(1)(t) - x.get(1)[k], 2) +
-                pow(interpolation_position_left.at(2)(t) - x.get(2)[k], 2));
-            double separation_at_t =
-                sqrt(pow(interpolation_position_left.at(0)(t) -
-                             interpolation_position_right.at(0)(t),
-                         2) +
-                     pow(interpolation_position_left.at(1)(t) -
-                             interpolation_position_right.at(1)(t),
-                         2) +
-                     pow(interpolation_position_left.at(2)(t) -
-                             interpolation_position_right.at(2)(t),
-                         2));
-            std::array<double, 3> momentum_left_at_t = {
-                interpolation_momentum_left.at(0)(t),
-                interpolation_momentum_left.at(1)(t),
-                interpolation_momentum_left.at(2)(t)};
-            std::array<double, 3> normal_left_at_t = {
-                (x.get(0)[k] - interpolation_position_left.at(0)(t)) /
-                    distance_left_at_t,
-                (x.get(1)[k] - interpolation_position_left.at(1)(t)) /
-                    distance_left_at_t,
-                (x.get(2)[k] - interpolation_position_left.at(2)(t)) /
-                    distance_left_at_t};
-            std::array<double, 3> normal_lr_at_t = {
-                (interpolation_position_left.at(0)(t) -
-                 interpolation_position_right.at(0)(t)) /
-                    separation_at_t,
-                (interpolation_position_left.at(1)(t) -
-                 interpolation_position_right.at(1)(t)) /
-                    separation_at_t,
-                (interpolation_position_left.at(2)(t) -
-                 interpolation_position_right.at(2)(t)) /
-                    separation_at_t};
-            std::array<std::array<double, 3>, 3> delta{
-                {{{1., 0., 0.}}, {{0., 1., 0.}}, {{0., 0., 1.}}}};
-            for (size_t l = 0; l < 3; ++l) {
-              u1.at(l) = momentum_left_at_t.at(l) / std::sqrt(mass_left);
-              u2.at(l) = sqrt(mass_left * mass_right / (2 * separation_at_t)) *
-                         normal_lr_at_t.at(l);
-            }
-            term1 =
-                t /
-                (distance_left_at_t * distance_left_at_t * distance_left_at_t) *
-                ((-5. * dot(u1, u1) +
-                  9. * dot(u1, normal_left_at_t) * dot(u1, normal_left_at_t)) *
-                     delta.at(i).at(j) +
-                 6. * u1.at(i) * u1.at(j) -
-                 6. * dot(u1, normal_left_at_t) *
-                     (u1.at(i) * normal_left_at_t.at(j) +
-                      u1.at(j) * normal_left_at_t.at(i)) +
-                 (9. * dot(u1, u1) -
-                  15. * dot(u1, normal_left_at_t) * dot(u1, normal_left_at_t)) *
-                     normal_left_at_t.at(i) * normal_left_at_t.at(j));
-            term2 =
-                t * t * t /
-                (distance_left_at_t * distance_left_at_t * distance_left_at_t *
-                 distance_left_at_t * distance_left_at_t) *
-                ((dot(u1, u1) -
-                  5. * dot(u1, normal_left_at_t) * dot(u1, normal_left_at_t)) *
-                     delta.at(i).at(j) +
-                 2. * u1.at(i) * u1.at(j) -
-                 10. * dot(u1, normal_left_at_t) *
-                     (u1.at(i) * normal_left_at_t.at(j) +
-                      u1.at(j) * normal_left_at_t.at(i)) +
-                 (-5. * dot(u1, u1) * dot(u1, u1) +
-                  35. * dot(u1, normal_left_at_t) * dot(u1, normal_left_at_t)) *
-                     normal_left_at_t.at(i) * normal_left_at_t.at(j));
-            term3 =
-                t /
-                (distance_left_at_t * distance_left_at_t * distance_left_at_t) *
-                ((-5. * dot(u2, u2) +
-                  9. * dot(u2, normal_left_at_t) * dot(u2, normal_left_at_t)) *
-                     delta.at(i).at(j) +
-                 6. * u2.at(i) * u2.at(j) -
-                 6. * dot(u2, normal_left_at_t) *
-                     (u2.at(i) * normal_left_at_t.at(j) +
-                      u2.at(j) * normal_left_at_t.at(i)) +
-                 (9. * dot(u2, u2) -
-                  15. * dot(u2, normal_left_at_t) * dot(u2, normal_left_at_t)) *
-                     normal_left_at_t.at(i) * normal_left_at_t.at(j));
-            term4 =
-                t * t * t /
-                (distance_left_at_t * distance_left_at_t * distance_left_at_t *
-                 distance_left_at_t * distance_left_at_t) *
-                ((dot(u2, u2) -
-                  5. * dot(u2, normal_left_at_t) * dot(u2, normal_left_at_t)) *
-                     delta.at(i).at(j) +
-                 2. * u2.at(i) * u2.at(j) -
-                 10. * dot(u2, normal_left_at_t) *
-                     (u2.at(i) * normal_left_at_t.at(j) +
-                      u2.at(j) * normal_left_at_t.at(i)) +
-                 (-5. * dot(u2, u2) * dot(u2, u2) +
-                  35. * dot(u2, normal_left_at_t) * dot(u2, normal_left_at_t)) *
-                     normal_left_at_t.at(i) * normal_left_at_t.at(j));
-          } else if (left_right == 1) {
-            double distance_right_at_t = sqrt(
-                pow(interpolation_position_right.at(0)(t) - x.get(0)[k], 2) +
-                pow(interpolation_position_right.at(1)(t) - x.get(1)[k], 2) +
-                pow(interpolation_position_right.at(2)(t) - x.get(2)[k], 2));
-            double separation_at_t =
-                sqrt(pow(interpolation_position_left.at(0)(t) -
-                             interpolation_position_right.at(0)(t),
-                         2) +
-                     pow(interpolation_position_left.at(1)(t) -
-                             interpolation_position_right.at(1)(t),
-                         2) +
-                     pow(interpolation_position_left.at(2)(t) -
-                             interpolation_position_right.at(2)(t),
-                         2));
-            std::array<double, 3> momentum_right_at_t = {
-                interpolation_momentum_right.at(0)(t),
-                interpolation_momentum_right.at(1)(t),
-                interpolation_momentum_right.at(2)(t)};
-            std::array<double, 3> normal_right_at_t = {
-                (x.get(0)[k] - interpolation_position_right.at(0)(t)) /
-                    distance_right_at_t,
-                (x.get(1)[k] - interpolation_position_right.at(1)(t)) /
-                    distance_right_at_t,
-                (x.get(2)[k] - interpolation_position_right.at(2)(t)) /
-                    distance_right_at_t};
-            std::array<double, 3> normal_lr_at_t = {
-                (interpolation_position_left.at(0)(t) -
-                 interpolation_position_right.at(0)(t)) /
-                    separation_at_t,
-                (interpolation_position_left.at(1)(t) -
-                 interpolation_position_right.at(1)(t)) /
-                    separation_at_t,
-                (interpolation_position_left.at(2)(t) -
-                 interpolation_position_right.at(2)(t)) /
-                    separation_at_t};
-            std::array<std::array<double, 3>, 3> delta{
-                {{{1., 0., 0.}}, {{0., 1., 0.}}, {{0., 0., 1.}}}};
-            for (size_t l = 0; l < 3; ++l) {
-              u1.at(l) = momentum_right_at_t.at(l) / std::sqrt(mass_right);
-              u2.at(l) = sqrt(mass_left * mass_right / (2 * separation_at_t)) *
-                         normal_lr_at_t.at(l);
-            }
-            term1 = t /
-                    (distance_right_at_t * distance_right_at_t *
-                     distance_right_at_t) *
-                    ((-5. * dot(u1, u1) + 9. * dot(u1, normal_right_at_t) *
-                                              dot(u1, normal_right_at_t)) *
-                         delta.at(i).at(j) +
-                     6. * u1.at(i) * u1.at(j) -
-                     6. * dot(u1, normal_right_at_t) *
-                         (u1.at(i) * normal_right_at_t.at(j) +
-                          u1.at(j) * normal_right_at_t.at(i)) +
-                     (9. * dot(u1, u1) - 15. * dot(u1, normal_right_at_t) *
-                                             dot(u1, normal_right_at_t)) *
-                         normal_right_at_t.at(i) * normal_right_at_t.at(j));
-            term2 = t * t * t /
-                    (distance_right_at_t * distance_right_at_t *
-                     distance_right_at_t * distance_right_at_t *
-                     distance_right_at_t) *
-                    ((dot(u1, u1) - 5. * dot(u1, normal_right_at_t) *
-                                        dot(u1, normal_right_at_t)) *
-                         delta.at(i).at(j) +
-                     2. * u1.at(i) * u1.at(j) -
-                     10. * dot(u1, normal_right_at_t) *
-                         (u1.at(i) * normal_right_at_t.at(j) +
-                          u1.at(j) * normal_right_at_t.at(i)) +
-                     (-5. * dot(u1, u1) * dot(u1, u1) +
-                      35. * dot(u1, normal_right_at_t) *
-                          dot(u1, normal_right_at_t)) *
-                         normal_right_at_t.at(i) * normal_right_at_t.at(j));
-            term3 = t /
-                    (distance_right_at_t * distance_right_at_t *
-                     distance_right_at_t) *
-                    ((-5. * dot(u2, u2) + 9. * dot(u2, normal_right_at_t) *
-                                              dot(u2, normal_right_at_t)) *
-                         delta.at(i).at(j) +
-                     6. * u2.at(i) * u2.at(j) -
-                     6. * dot(u2, normal_right_at_t) *
-                         (u2.at(i) * normal_right_at_t.at(j) +
-                          u2.at(j) * normal_right_at_t.at(i)) +
-                     (9. * dot(u2, u2) - 15. * dot(u2, normal_right_at_t) *
-                                             dot(u2, normal_right_at_t)) *
-                         normal_right_at_t.at(i) * normal_right_at_t.at(j));
-            term4 = t * t * t /
-                    (distance_right_at_t * distance_right_at_t *
-                     distance_right_at_t * distance_right_at_t *
-                     distance_right_at_t) *
-                    ((dot(u2, u2) - 5. * dot(u2, normal_right_at_t) *
-                                        dot(u2, normal_right_at_t)) *
-                         delta.at(i).at(j) +
-                     2. * u2.at(i) * u2.at(j) -
-                     10. * dot(u2, normal_right_at_t) *
-                         (u2.at(i) * normal_right_at_t.at(j) +
-                          u2.at(j) * normal_right_at_t.at(i)) +
-                     (-5. * dot(u2, u2) * dot(u2, u2) +
-                      35. * dot(u2, normal_right_at_t) *
-                          dot(u2, normal_right_at_t)) *
-                         normal_right_at_t.at(i) * normal_right_at_t.at(j));
-          } else {
-            term1 = 0.;
-            term2 = 0.;
-            term3 = 0.;
-            term4 = 0.;
+          double this_distance_at_t =
+              sqrt(pow(this_interpolation_position.at(0)(t) - x.get(0)[k], 2) +
+                   pow(this_interpolation_position.at(1)(t) - x.get(1)[k], 2) +
+                   pow(this_interpolation_position.at(2)(t) - x.get(2)[k], 2));
+          double separation_at_t =
+              sqrt(pow(interpolation_position_left.at(0)(t) -
+                           interpolation_position_right.at(0)(t),
+                       2) +
+                   pow(interpolation_position_left.at(1)(t) -
+                           interpolation_position_right.at(1)(t),
+                       2) +
+                   pow(interpolation_position_left.at(2)(t) -
+                           interpolation_position_right.at(2)(t),
+                       2));
+          std::array<double, 3> this_momentum_at_t = {
+              this_interpolation_momentum.at(0)(t),
+              this_interpolation_momentum.at(1)(t),
+              this_interpolation_momentum.at(2)(t)};
+          std::array<double, 3> this_normal_at_t = {
+              (x.get(0)[k] - this_interpolation_position.at(0)(t)) /
+                  this_distance_at_t,
+              (x.get(1)[k] - this_interpolation_position.at(1)(t)) /
+                  this_distance_at_t,
+              (x.get(2)[k] - this_interpolation_position.at(2)(t)) /
+                  this_distance_at_t};
+          std::array<double, 3> normal_lr_at_t = {
+              (interpolation_position_left.at(0)(t) -
+               interpolation_position_right.at(0)(t)) /
+                  separation_at_t,
+              (interpolation_position_left.at(1)(t) -
+               interpolation_position_right.at(1)(t)) /
+                  separation_at_t,
+              (interpolation_position_left.at(2)(t) -
+               interpolation_position_right.at(2)(t)) /
+                  separation_at_t};
+          std::array<std::array<double, 3>, 3> delta{
+              {{{1., 0., 0.}}, {{0., 1., 0.}}, {{0., 0., 1.}}}};
+          for (size_t l = 0; l < 3; ++l) {
+            u1.at(l) = this_momentum_at_t.at(l) / std::sqrt(mass_left);
+            u2.at(l) = sqrt(mass_left * mass_right / (2 * separation_at_t)) *
+                       normal_lr_at_t.at(l);
           }
+          term1 =
+              t /
+              (this_distance_at_t * this_distance_at_t * this_distance_at_t) *
+              ((-5. * dot(u1, u1) +
+                9. * dot(u1, this_normal_at_t) * dot(u1, this_normal_at_t)) *
+                   delta.at(i).at(j) +
+               6. * u1.at(i) * u1.at(j) -
+               6. * dot(u1, this_normal_at_t) *
+                   (u1.at(i) * this_normal_at_t.at(j) +
+                    u1.at(j) * this_normal_at_t.at(i)) +
+               (9. * dot(u1, u1) -
+                15. * dot(u1, this_normal_at_t) * dot(u1, this_normal_at_t)) *
+                   this_normal_at_t.at(i) * this_normal_at_t.at(j));
+          term2 =
+              t * t * t /
+              (this_distance_at_t * this_distance_at_t * this_distance_at_t *
+               this_distance_at_t * this_distance_at_t) *
+              ((dot(u1, u1) -
+                5. * dot(u1, this_normal_at_t) * dot(u1, this_normal_at_t)) *
+                   delta.at(i).at(j) +
+               2. * u1.at(i) * u1.at(j) -
+               10. * dot(u1, this_normal_at_t) *
+                   (u1.at(i) * this_normal_at_t.at(j) +
+                    u1.at(j) * this_normal_at_t.at(i)) +
+               (-5. * dot(u1, u1) * dot(u1, u1) +
+                35. * dot(u1, this_normal_at_t) * dot(u1, this_normal_at_t)) *
+                   this_normal_at_t.at(i) * this_normal_at_t.at(j));
+          term3 =
+              t /
+              (this_distance_at_t * this_distance_at_t * this_distance_at_t) *
+              ((-5. * dot(u2, u2) +
+                9. * dot(u2, this_normal_at_t) * dot(u2, this_normal_at_t)) *
+                   delta.at(i).at(j) +
+               6. * u2.at(i) * u2.at(j) -
+               6. * dot(u2, this_normal_at_t) *
+                   (u2.at(i) * this_normal_at_t.at(j) +
+                    u2.at(j) * this_normal_at_t.at(i)) +
+               (9. * dot(u2, u2) -
+                15. * dot(u2, this_normal_at_t) * dot(u2, this_normal_at_t)) *
+                   this_normal_at_t.at(i) * this_normal_at_t.at(j));
+          term4 =
+              t * t * t /
+              (this_distance_at_t * this_distance_at_t * this_distance_at_t *
+               this_distance_at_t * this_distance_at_t) *
+              ((dot(u2, u2) -
+                5. * dot(u2, this_normal_at_t) * dot(u2, this_normal_at_t)) *
+                   delta.at(i).at(j) +
+               2. * u2.at(i) * u2.at(j) -
+               10. * dot(u2, this_normal_at_t) *
+                   (u2.at(i) * this_normal_at_t.at(j) +
+                    u2.at(j) * this_normal_at_t.at(i)) +
+               (-5. * dot(u2, u2) * dot(u2, u2) +
+                35. * dot(u2, this_normal_at_t) * dot(u2, this_normal_at_t)) *
+                   this_normal_at_t.at(i) * this_normal_at_t.at(j));
           return term1 + term2 + term3 + term4;
-          // return 0.0;
         },
-        time[k], 0.0, 100., 0, 1e-6);  // for gsl gauss-kronrod
-    // time[k], 0.0, 6, 1e-8, &error); // for boost gauss-kronrod
-    // time[k], 0.0, 1e-8);  // for boost trapezoidal with tolerance
-    // time[k], 0.0); // for boost trapezoidal without tolerance
+        time[k], 0.0, 100., 0, 1e-6);
   }
   return result;
 }
