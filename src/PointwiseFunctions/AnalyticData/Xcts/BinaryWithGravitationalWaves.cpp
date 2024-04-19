@@ -1114,7 +1114,6 @@ DataType BinaryWithGravitationalWavesVariables<DataType>::integrate_term(
       this_interpolation_momentum.at(l) = interpolation_momentum_right.at(l);
     }
   }
-
   for (size_t k = 0; k < x.get(0).size(); ++k) {
     const integration::GslQuadAdaptive<
         integration::GslIntegralType::StandardGaussKronrod>
@@ -1124,15 +1123,11 @@ DataType BinaryWithGravitationalWavesVariables<DataType>::integrate_term(
          &this_interpolation_momentum](const double t) {
           std::array<double, 3> u1{};
           std::array<double, 3> u2{};
-          double term1(0.);
-          double term2(0.);
-          double term3(0.);
-          double term4(0.);
-          double this_distance_at_t =
+          const double this_distance_at_t =
               sqrt(pow(this_interpolation_position.at(0)(t) - x.get(0)[k], 2) +
                    pow(this_interpolation_position.at(1)(t) - x.get(1)[k], 2) +
                    pow(this_interpolation_position.at(2)(t) - x.get(2)[k], 2));
-          double separation_at_t =
+          const double separation_at_t =
               sqrt(pow(interpolation_position_left.at(0)(t) -
                            interpolation_position_right.at(0)(t),
                        2) +
@@ -1142,18 +1137,18 @@ DataType BinaryWithGravitationalWavesVariables<DataType>::integrate_term(
                    pow(interpolation_position_left.at(2)(t) -
                            interpolation_position_right.at(2)(t),
                        2));
-          std::array<double, 3> this_momentum_at_t = {
+          const std::array<double, 3> this_momentum_at_t = {
               this_interpolation_momentum.at(0)(t),
               this_interpolation_momentum.at(1)(t),
               this_interpolation_momentum.at(2)(t)};
-          std::array<double, 3> this_normal_at_t = {
+          const std::array<double, 3> this_normal_at_t = {
               (x.get(0)[k] - this_interpolation_position.at(0)(t)) /
                   this_distance_at_t,
               (x.get(1)[k] - this_interpolation_position.at(1)(t)) /
                   this_distance_at_t,
               (x.get(2)[k] - this_interpolation_position.at(2)(t)) /
                   this_distance_at_t};
-          std::array<double, 3> normal_lr_at_t = {
+          const std::array<double, 3> normal_lr_at_t = {
               (interpolation_position_left.at(0)(t) -
                interpolation_position_right.at(0)(t)) /
                   separation_at_t,
@@ -1163,14 +1158,14 @@ DataType BinaryWithGravitationalWavesVariables<DataType>::integrate_term(
               (interpolation_position_left.at(2)(t) -
                interpolation_position_right.at(2)(t)) /
                   separation_at_t};
-          std::array<std::array<double, 3>, 3> delta{
+          const std::array<std::array<double, 3>, 3> delta{
               {{{1., 0., 0.}}, {{0., 1., 0.}}, {{0., 0., 1.}}}};
           for (size_t l = 0; l < 3; ++l) {
             u1.at(l) = this_momentum_at_t.at(l) / std::sqrt(mass_left);
             u2.at(l) = sqrt(mass_left * mass_right / (2 * separation_at_t)) *
                        normal_lr_at_t.at(l);
           }
-          term1 =
+          const double term1 =
               t /
               (this_distance_at_t * this_distance_at_t * this_distance_at_t) *
               ((-5. * dot(u1, u1) +
@@ -1183,7 +1178,7 @@ DataType BinaryWithGravitationalWavesVariables<DataType>::integrate_term(
                (9. * dot(u1, u1) -
                 15. * dot(u1, this_normal_at_t) * dot(u1, this_normal_at_t)) *
                    this_normal_at_t.at(i) * this_normal_at_t.at(j));
-          term2 =
+          const double term2 =
               t * t * t /
               (this_distance_at_t * this_distance_at_t * this_distance_at_t *
                this_distance_at_t * this_distance_at_t) *
@@ -1197,7 +1192,7 @@ DataType BinaryWithGravitationalWavesVariables<DataType>::integrate_term(
                (-5. * dot(u1, u1) * dot(u1, u1) +
                 35. * dot(u1, this_normal_at_t) * dot(u1, this_normal_at_t)) *
                    this_normal_at_t.at(i) * this_normal_at_t.at(j));
-          term3 =
+          const double term3 =
               t /
               (this_distance_at_t * this_distance_at_t * this_distance_at_t) *
               ((-5. * dot(u2, u2) +
@@ -1210,7 +1205,7 @@ DataType BinaryWithGravitationalWavesVariables<DataType>::integrate_term(
                (9. * dot(u2, u2) -
                 15. * dot(u2, this_normal_at_t) * dot(u2, this_normal_at_t)) *
                    this_normal_at_t.at(i) * this_normal_at_t.at(j));
-          term4 =
+          const double term4 =
               t * t * t /
               (this_distance_at_t * this_distance_at_t * this_distance_at_t *
                this_distance_at_t * this_distance_at_t) *
@@ -1226,7 +1221,7 @@ DataType BinaryWithGravitationalWavesVariables<DataType>::integrate_term(
                    this_normal_at_t.at(i) * this_normal_at_t.at(j));
           return term1 + term2 + term3 + term4;
         },
-        time[k], 0.0, 100., 0, 1e-6);
+        time[k], 0.0, 1., max_time_interpolator, 1e-8);
   }
   return result;
 }
