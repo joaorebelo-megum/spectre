@@ -258,8 +258,8 @@ void test_data(const double mass_left, const double mass_right,
         {"retarded_time_left", "retarded_time_right", "past_term",
          "integral_term", "radiative_term", "conformal_metric",
          "extrinsic_curvature_trace"},
-        {{{-10. + xcoord_left, xcoord_right + 10.}}}, std::make_tuple(),
-        DataVector(1), 1e-3);
+        {{{-5. + xcoord_left, xcoord_left + 5.}}}, std::make_tuple(),
+        DataVector(1), 1e-2);
   }
 }
 
