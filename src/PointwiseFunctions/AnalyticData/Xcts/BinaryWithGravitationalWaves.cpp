@@ -1111,11 +1111,11 @@ DataType BinaryWithGravitationalWavesVariables<DataType>::integrate_term(
       this_mass = mass_right;
     }
   }
+  const integration::GslQuadAdaptive<
+      integration::GslIntegralType::StandardGaussKronrod>
+      integration{10};
   for (size_t k = 0; k < x.get(0).size(); ++k) {
-    const integration::GslQuadAdaptive<
-        integration::GslIntegralType::StandardGaussKronrod>
-        integration{10};
-    result[k] = integration(
+    auto integrand =
         [this, i, j, k, &this_interpolation_position,
          &this_interpolation_momentum, &this_mass](const double t) {
           std::array<double, 3> u1{};
@@ -1217,8 +1217,9 @@ DataType BinaryWithGravitationalWavesVariables<DataType>::integrate_term(
                 35. * dot(u2, this_normal_at_t) * dot(u2, this_normal_at_t)) *
                    this_normal_at_t.at(i) * this_normal_at_t.at(j));
           return term1 + term2 + term3 + term4;
-        },
-        time[k], 0.0, 1., max_time_interpolator, 1e-8);
+        };
+    result[k] =
+        integration(integrand, time[k], max_time_interpolator, 1., 0, 1e-8);
   }
   return result;
 }
