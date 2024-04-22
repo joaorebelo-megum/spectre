@@ -75,14 +75,16 @@ using test_tags_exact = tmpl::list<
     gr::Tags::Conformal<gr::Tags::StressTrace<DataVector>, 0>,
     gr::Tags::Conformal<gr::Tags::MomentumDensity<DataVector, 3>, 0>>;
 
-using test_tags_numeric =
-    tmpl::list<detail::Tags::RetardedTimeLeft<DataVector>,
-               detail::Tags::RetardedTimeRight<DataVector>,
-               detail::Tags::PastTerm<DataVector>,
+using test_tags_numeric1 =
+    tmpl::list<detail::Tags::PastTerm<DataVector>,
                detail::Tags::IntegralTerm<DataVector>,
                detail::Tags::RadiativeTerm<DataVector>,
                Tags::ConformalMetric<DataVector, 3, Frame::Inertial>,
                gr::Tags::TraceExtrinsicCurvature<DataVector>>;
+
+using test_tags_numeric2 =
+    tmpl::list<detail::Tags::RetardedTimeLeft<DataVector>,
+               detail::Tags::RetardedTimeRight<DataVector>>;
 
 struct BinaryWithGravitationalWavesProxyExact {
   tuples::tagged_tuple_from_typelist<test_tags_exact> test_variables(
@@ -93,10 +95,19 @@ struct BinaryWithGravitationalWavesProxyExact {
   const BinaryWithGravitationalWaves& binary;
 };
 
-struct BinaryWithGravitationalWavesProxyNumeric {
-  tuples::tagged_tuple_from_typelist<test_tags_numeric> test_variables(
+struct BinaryWithGravitationalWavesProxyNumeric1 {
+  tuples::tagged_tuple_from_typelist<test_tags_numeric1> test_variables(
       const tnsr::I<DataVector, 3, Frame::Inertial>& x) const {
-    return binary.variables(x, test_tags_numeric{});
+    return binary.variables(x, test_tags_numeric1{});
+  }
+
+  const BinaryWithGravitationalWaves& binary;
+};
+
+struct BinaryWithGravitationalWavesProxyNumeric2 {
+  tuples::tagged_tuple_from_typelist<test_tags_numeric2> test_variables(
+      const tnsr::I<DataVector, 3, Frame::Inertial>& x) const {
+    return binary.variables(x, test_tags_numeric2{});
   }
 
   const BinaryWithGravitationalWaves& binary;
@@ -261,15 +272,23 @@ void test_data(const double mass_left, const double mass_right,
         DataVector(5));
   }
   {
-    const BinaryWithGravitationalWavesProxyNumeric proxy{binary};
+    const BinaryWithGravitationalWavesProxyNumeric1 proxy{binary};
     pypp::check_with_random_values<1>(
-        &BinaryWithGravitationalWavesProxyNumeric::test_variables, proxy,
+        &BinaryWithGravitationalWavesProxyNumeric1::test_variables, proxy,
         "BinaryWithGravitationalWaves",
-        {"retarded_time_left", "retarded_time_right", "past_term",
-         "integral_term", "radiative_term", "conformal_metric",
+        {"past_term", "integral_term", "radiative_term", "conformal_metric",
          "extrinsic_curvature_trace"},
         {{{-5. + xcoord_left, xcoord_left + 5.}}}, std::make_tuple(),
-        DataVector(1), 1e-2);
+        DataVector(1), 1e-4);
+  }
+  {
+    const BinaryWithGravitationalWavesProxyNumeric2 proxy{binary};
+    pypp::check_with_random_values<1>(
+        &BinaryWithGravitationalWavesProxyNumeric2::test_variables, proxy,
+        "BinaryWithGravitationalWaves",
+        {"retarded_time_left", "retarded_time_right"},
+        {{{-5. + xcoord_left, xcoord_left + 5.}}}, std::make_tuple(),
+        DataVector(1), 1e-3);
   }
 }
 

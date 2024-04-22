@@ -1103,15 +1103,18 @@ DataType BinaryWithGravitationalWavesVariables<DataType>::integrate_term(
   DataType result{x.get(0).size()};
   std::array<std::function<double(double)>, 3> this_interpolation_position{};
   std::array<std::function<double(double)>, 3> this_interpolation_momentum{};
+  double this_mass(0.);
   if (left_right == -1) {
     for (size_t l = 0; l < 3; ++l) {
       this_interpolation_position.at(l) = interpolation_position_left.at(l);
       this_interpolation_momentum.at(l) = interpolation_momentum_left.at(l);
+      this_mass = mass_left;
     }
   } else if (left_right == 1) {
     for (size_t l = 0; l < 3; ++l) {
       this_interpolation_position.at(l) = interpolation_position_right.at(l);
       this_interpolation_momentum.at(l) = interpolation_momentum_right.at(l);
+      this_mass = mass_right;
     }
   }
   for (size_t k = 0; k < x.get(0).size(); ++k) {
@@ -1120,7 +1123,7 @@ DataType BinaryWithGravitationalWavesVariables<DataType>::integrate_term(
         integration{10};
     result[k] = integration(
         [this, i, j, k, &this_interpolation_position,
-         &this_interpolation_momentum](const double t) {
+         &this_interpolation_momentum, &this_mass](const double t) {
           std::array<double, 3> u1{};
           std::array<double, 3> u2{};
           const double this_distance_at_t =
@@ -1161,7 +1164,7 @@ DataType BinaryWithGravitationalWavesVariables<DataType>::integrate_term(
           const std::array<std::array<double, 3>, 3> delta{
               {{{1., 0., 0.}}, {{0., 1., 0.}}, {{0., 0., 1.}}}};
           for (size_t l = 0; l < 3; ++l) {
-            u1.at(l) = this_momentum_at_t.at(l) / std::sqrt(mass_left);
+            u1.at(l) = this_momentum_at_t.at(l) / std::sqrt(this_mass);
             u2.at(l) = sqrt(mass_left * mass_right / (2 * separation_at_t)) *
                        normal_lr_at_t.at(l);
           }
