@@ -806,8 +806,7 @@ DataType BinaryWithGravitationalWavesVariables<DataType>::integrate_term(
                    this_normal_at_t.at(i) * this_normal_at_t.at(j));
           return term1 + term2 + term3 + term4;
         };
-    result[k] =
-        integration(integrand, time[k], max_time_interpolator, 1., 0, 1e-8);
+    result[k] = integration(integrand, time[k], t0, 1., 0, 1e-8);
   }
   return result;
 }
