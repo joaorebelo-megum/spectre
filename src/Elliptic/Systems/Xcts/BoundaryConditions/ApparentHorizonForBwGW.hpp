@@ -21,8 +21,10 @@
 #include "Options/Auto.hpp"
 #include "Options/Context.hpp"
 #include "Options/String.hpp"
+#include "PointwiseFunctions/AnalyticData/Xcts/AnalyticData.hpp"
+#include "PointwiseFunctions/AnalyticData/Xcts/BinaryWithGravitationalWaves.hpp"
+#include "PointwiseFunctions/AnalyticData/Xcts/CommonVariables.hpp"
 #include "PointwiseFunctions/GeneralRelativity/Tags.hpp"
-#include "PointwiseFunctions/InitialDataUtilities/AnalyticSolution.hpp"
 #include "Utilities/Gsl.hpp"
 #include "Utilities/MakeArray.hpp"
 #include "Utilities/Serialization/CharmPupable.hpp"
@@ -98,7 +100,7 @@ namespace Xcts::BoundaryConditions {
  * initialization time and store them in the DataBox.
  */
 template <Xcts::Geometry ConformalGeometry>
-class ApparentHorizon
+class ApparentHorizonForBwGW
     : public elliptic::BoundaryConditions::BoundaryCondition<3> {
  private:
   using Base = elliptic::BoundaryConditions::BoundaryCondition<3>;
@@ -106,25 +108,36 @@ class ApparentHorizon
  public:
   static constexpr Options::String help =
       "Impose the boundary is a quasi-equilibrium apparent horizon.";
-
-  struct Center {
-    using type = std::array<double, 3>;
-    static constexpr Options::String help =
-        "The center of the excision surface representing the apparent-horizon "
-        "surface";
+  struct MassLeft {
+    static constexpr Options::String help = "The mass of the left black hole.";
+    using type = double;
   };
-  struct Rotation {
-    using type = std::array<double, 3>;
+  struct MassRight {
+    static constexpr Options::String help = "The mass of the right black hole.";
+    using type = double;
+  };
+  struct XCoordsLeft {
     static constexpr Options::String help =
-        "The rotational parameters 'Omega' on the surface, which parametrize "
-        "the spin of the black hole. The rotational parameters enter the "
-        "Dirichlet boundary conditions for the shift in a term "
-        "'Omega x (r - Center)', where 'r' are the coordinates on the surface.";
+        "The coordinates on the x-axis of the left black hole.";
+    using type = double;
+  };
+  struct XCoordsRight {
+    static constexpr Options::String help =
+        "The coordinates on the x-axis of the right black hole.";
+    using type = double;
+  };
+  struct AttenuationParameter {
+    static constexpr Options::String help =
+        "The parameter controlling the width of the attenuation function.";
+    using type = double;
+  };
+  struct OuterRadius {
+    static constexpr Options::String help =
+        "The radius of the outer boundary of the computational domain.";
+    using type = double;
   };
   struct Lapse {
-    using type = Options::Auto<
-        std::unique_ptr<elliptic::analytic_data::AnalyticSolution>,
-        Options::AutoLabel::None>;
+    using type = bool;
     static constexpr Options::String help =
         "Specify an analytic solution to impose a Dirichlet condition on the "
         "lapse. The analytic solution will be evaluated at coordinates "
@@ -135,76 +148,54 @@ class ApparentHorizon
         "for a single black hole.";
   };
   struct NegativeExpansion {
-    using type = Options::Auto<
-        std::unique_ptr<elliptic::analytic_data::AnalyticSolution>,
-        Options::AutoLabel::None>;
+    using type = bool;
     static constexpr Options::String help =
-        "Specify an analytic solution to impose its expansion at the excision "
-        "surface. The analytic solution will be evaluated at coordinates "
-        "centered at the apparent horizon. "
         "If the excision surface lies within the solution's "
         "apparent horizon, the imposed expansion will be negative and thus the "
         "excision surface will lie within an apparent horizon. Alternatively, "
-        "set this option to 'None' to impose the expansion is zero at the "
+        "set this option to 'False' to impose the expansion is zero at the "
         "excision surface, meaning the excision surface _is_ an apparent "
         "horizon.";
   };
 
-  using options = tmpl::list<Center, Rotation, Lapse, NegativeExpansion>;
+  using options =
+      tmpl::list<MassLeft, MassRight, XCoordsLeft, XCoordsRight,
+                 AttenuationParameter, OuterRadius, Lapse, NegativeExpansion>;
 
-  ApparentHorizon() = default;
-  ApparentHorizon(const ApparentHorizon&) = delete;
-  ApparentHorizon& operator=(const ApparentHorizon&) = delete;
-  ApparentHorizon(ApparentHorizon&&) = default;
-  ApparentHorizon& operator=(ApparentHorizon&&) = default;
-  ~ApparentHorizon() = default;
+  ApparentHorizonForBwGW() = default;
+  ApparentHorizonForBwGW(const ApparentHorizonForBwGW&) = delete;
+  ApparentHorizonForBwGW& operator=(const ApparentHorizonForBwGW&) = delete;
+  ApparentHorizonForBwGW(ApparentHorizonForBwGW&&) = default;
+  ApparentHorizonForBwGW& operator=(ApparentHorizonForBwGW&&) = default;
+  ~ApparentHorizonForBwGW() override = default;
 
   /// \cond
-  explicit ApparentHorizon(CkMigrateMessage* m) : Base(m) {}
+  explicit ApparentHorizonForBwGW(CkMigrateMessage* m) : Base(m) {}
   using PUP::able::register_constructor;
-  WRAPPED_PUPable_decl_template(ApparentHorizon);
+  WRAPPED_PUPable_decl_template(ApparentHorizonForBwGW);
   /// \endcond
 
   std::unique_ptr<domain::BoundaryConditions::BoundaryCondition> get_clone()
       const override {
-    return std::make_unique<ApparentHorizon>(
-        center_, rotation_,
-        solution_for_lapse_.has_value()
-            ? std::make_optional(solution_for_lapse_.value()->get_clone())
-            : std::nullopt,
-        solution_for_negative_expansion_.has_value()
-            ? std::make_optional(
-                  solution_for_negative_expansion_.value()->get_clone())
-            : std::nullopt);
+    return std::make_unique<ApparentHorizonForBwGW>(
+        mass_left_, mass_right_, xcoord_left_, xcoord_right_,
+        attenuation_parameter_, outer_radius_, solution_for_lapse_,
+        solution_for_negative_expansion_);
   }
 
-  ApparentHorizon(
-      std::array<double, 3> center, std::array<double, 3> rotation,
-      std::optional<std::unique_ptr<elliptic::analytic_data::AnalyticSolution>>
-          solution_for_lapse,
-      std::optional<std::unique_ptr<elliptic::analytic_data::AnalyticSolution>>
-          solution_for_negative_expansion,
-      const Options::Context& context = {});
-
-  const std::array<double, 3>& center() const { return center_; }
-  const std::array<double, 3>& rotation() const { return rotation_; }
-  const std::optional<
-      std::unique_ptr<elliptic::analytic_data::AnalyticSolution>>&
-  solution_for_lapse() const {
-    return solution_for_lapse_;
-  }
-  const std::optional<
-      std::unique_ptr<elliptic::analytic_data::AnalyticSolution>>&
-  solution_for_negative_expansion() const {
-    return solution_for_negative_expansion_;
-  }
+  ApparentHorizonForBwGW(double mass_left, double mass_right,
+                         double xcoord_left, double xcoord_right,
+                         double attenuation_parameter, double outer_radius,
+                         bool solution_for_lapse,
+                         bool solution_for_negative_expansion,
+                         const Options::Context& context = {});
 
   std::vector<elliptic::BoundaryConditionType> boundary_condition_types()
       const override {
     return {// Conformal factor
             elliptic::BoundaryConditionType::Neumann,
             // Lapse times conformal factor
-            this->solution_for_lapse_.has_value()
+            this->lapse_solution_.has_value()
                 ? elliptic::BoundaryConditionType::Dirichlet
                 : elliptic::BoundaryConditionType::Neumann,
             // Shift
@@ -239,9 +230,6 @@ class ApparentHorizon
       gsl::not_null<Scalar<DataVector>*>
           n_dot_lapse_times_conformal_factor_gradient,
       gsl::not_null<tnsr::I<DataVector, 3>*> n_dot_longitudinal_shift_excess,
-      const tnsr::i<DataVector, 3>& deriv_conformal_factor,
-      const tnsr::i<DataVector, 3>& deriv_lapse_times_conformal_factor,
-      const tnsr::iJ<DataVector, 3>& deriv_shift_excess,
       const tnsr::i<DataVector, 3>& face_normal,
       const tnsr::ij<DataVector, 3>& deriv_unnormalized_face_normal,
       const Scalar<DataVector>& face_normal_magnitude,
@@ -258,9 +246,6 @@ class ApparentHorizon
       gsl::not_null<Scalar<DataVector>*>
           n_dot_lapse_times_conformal_factor_gradient,
       gsl::not_null<tnsr::I<DataVector, 3>*> n_dot_longitudinal_shift_excess,
-      const tnsr::i<DataVector, 3>& deriv_conformal_factor,
-      const tnsr::i<DataVector, 3>& deriv_lapse_times_conformal_factor,
-      const tnsr::iJ<DataVector, 3>& deriv_shift_excess,
       const tnsr::i<DataVector, 3>& face_normal,
       const tnsr::ij<DataVector, 3>& deriv_unnormalized_face_normal,
       const Scalar<DataVector>& face_normal_magnitude,
@@ -304,10 +289,6 @@ class ApparentHorizon
           n_dot_lapse_times_conformal_factor_gradient_correction,
       gsl::not_null<tnsr::I<DataVector, 3>*>
           n_dot_longitudinal_shift_excess_correction,
-      const tnsr::i<DataVector, 3>& deriv_conformal_factor_correction,
-      const tnsr::i<DataVector, 3>&
-          deriv_lapse_times_conformal_factor_correction,
-      const tnsr::iJ<DataVector, 3>& deriv_shift_excess_correction,
       const tnsr::i<DataVector, 3>& face_normal,
       const tnsr::ij<DataVector, 3>& deriv_unnormalized_face_normal,
       const Scalar<DataVector>& face_normal_magnitude,
@@ -329,10 +310,6 @@ class ApparentHorizon
           n_dot_lapse_times_conformal_factor_gradient_correction,
       gsl::not_null<tnsr::I<DataVector, 3>*>
           n_dot_longitudinal_shift_excess_correction,
-      const tnsr::i<DataVector, 3>& deriv_conformal_factor_correction,
-      const tnsr::i<DataVector, 3>&
-          deriv_lapse_times_conformal_factor_correction,
-      const tnsr::iJ<DataVector, 3>& deriv_shift_excess_correction,
       const tnsr::i<DataVector, 3>& face_normal,
       const tnsr::ij<DataVector, 3>& deriv_unnormalized_face_normal,
       const Scalar<DataVector>& face_normal_magnitude,
@@ -349,14 +326,23 @@ class ApparentHorizon
   void pup(PUP::er& p) override;
 
  private:
-  std::array<double, 3> center_ =
-      make_array<3>(std::numeric_limits<double>::signaling_NaN());
-  std::array<double, 3> rotation_ =
-      make_array<3>(std::numeric_limits<double>::signaling_NaN());
-  std::optional<std::unique_ptr<elliptic::analytic_data::AnalyticSolution>>
-      solution_for_lapse_{};
-  std::optional<std::unique_ptr<elliptic::analytic_data::AnalyticSolution>>
-      solution_for_negative_expansion_{};
+  double mass_left_ = std::numeric_limits<double>::signaling_NaN();
+  double mass_right_ = std::numeric_limits<double>::signaling_NaN();
+  double xcoord_left_ = std::numeric_limits<double>::signaling_NaN();
+  double xcoord_right_ = std::numeric_limits<double>::signaling_NaN();
+  double attenuation_parameter_ = std::numeric_limits<double>::signaling_NaN();
+  double outer_radius_ = std::numeric_limits<double>::signaling_NaN();
+  bool write_evolution_option_ = false;
+  bool solution_for_lapse_ = false;
+  bool solution_for_negative_expansion_ = true;
+
+  std::optional<
+      std::unique_ptr<Xcts::AnalyticData::BinaryWithGravitationalWaves>>
+      lapse_solution_{};
+
+  std::optional<
+      std::unique_ptr<Xcts::AnalyticData::BinaryWithGravitationalWaves>>
+      negative_expansion_solution_{};
 };
 
 }  // namespace Xcts::BoundaryConditions
