@@ -429,7 +429,27 @@ void BinaryWithGravitationalWavesVariables<DataType>::operator()(
         lapse_times_conformal_factor_minus_one,
     const gsl::not_null<Cache*> /*cache*/,
     Xcts::Tags::LapseTimesConformalFactorMinusOne<DataType> /*meta*/) const {
-  get(*lapse_times_conformal_factor_minus_one) = 0.;
+  DataType present_time(get_size(get<0>(x)), max_time_interpolator);
+  const auto distance_left_past = get_past_distance_left(present_time);
+  const auto distance_right_past = get_past_distance_right(present_time);
+  const auto separation_past = get_past_separation(present_time);
+  const auto momentum_left_past = get_past_momentum_left(present_time);
+  const auto momentum_right_past = get_past_momentum_right(present_time);
+  const DataType E_left_past =
+      mass_left +
+      get(dot_product(momentum_left_past, momentum_left_past)) /
+          (2. * mass_left) -
+      mass_left * mass_right / (2. * get(separation_past));
+  const DataType E_right_past =
+      mass_right +
+      get(dot_product(momentum_right_past, momentum_right_past)) /
+          (2. * mass_right) -
+      mass_left * mass_right / (2. * get(separation_past));
+  const auto pn_comformal_factor_past =
+      1. + E_left_past / (2. * get(distance_left_past)) +
+      E_right_past / (2. * get(distance_right_past));
+  get(*lapse_times_conformal_factor_minus_one) =
+      2. / (1. + pow(4, pn_comformal_factor_past)) - 1.;
 }
 
 template <typename DataType>
