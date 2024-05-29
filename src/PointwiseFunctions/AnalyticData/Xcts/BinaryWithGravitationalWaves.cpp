@@ -432,11 +432,20 @@ void BinaryWithGravitationalWavesVariables<DataType>::operator()(
       get(dot_product(momentum_right_past, momentum_right_past)) /
           (2. * mass_right) -
       mass_left * mass_right / (2. * get(separation_past));
-  const auto pn_comformal_factor_past =
+  const auto pn_comformal_factor_past_plus =
       1. + E_left_past / (2. * get(distance_left_past)) +
       E_right_past / (2. * get(distance_right_past));
-  get(*lapse_times_conformal_factor_minus_one) =
-      2. / (1. + pow(4, pn_comformal_factor_past)) - 1.;
+  const auto pn_comformal_factor_past_minus =
+      1. - E_left_past / (2. * get(distance_left_past)) -
+      E_right_past / (2. * get(distance_right_past));
+  const auto pn_lapse =
+      pn_comformal_factor_past_minus / pn_comformal_factor_past_plus;
+  const auto function =
+      1. / (pn_comformal_factor_past_minus * pn_comformal_factor_past_plus);
+  const auto lapse =
+      sqrt(-1 / (-1 / square(pn_lapse) +
+                 square(function) / pow<4>(pn_comformal_factor_past_plus)));
+  get(*lapse_times_conformal_factor_minus_one) = lapse - 1.;
 }
 
 template <typename DataType>
@@ -444,7 +453,40 @@ void BinaryWithGravitationalWavesVariables<DataType>::operator()(
     const gsl::not_null<tnsr::I<DataType, Dim>*> shift_excess,
     const gsl::not_null<Cache*> /*cache*/,
     Xcts::Tags::ShiftExcess<DataType, Dim, Frame::Inertial> /*meta*/) const {
-  std::fill(shift_excess->begin(), shift_excess->end(), 0.);
+  DataType present_time(get_size(get<0>(x)), max_time_interpolator);
+  const auto distance_left_past = get_past_distance_left(present_time);
+  const auto distance_right_past = get_past_distance_right(present_time);
+  const auto separation_past = get_past_separation(present_time);
+  const auto momentum_left_past = get_past_momentum_left(present_time);
+  const auto momentum_right_past = get_past_momentum_right(present_time);
+  const auto normal_left_past = get_past_normal_left(present_time);
+  const auto normal_right_past = get_past_normal_right(present_time);
+  const DataType E_left_past =
+      mass_left +
+      get(dot_product(momentum_left_past, momentum_left_past)) /
+          (2. * mass_left) -
+      mass_left * mass_right / (2. * get(separation_past));
+  const DataType E_right_past =
+      mass_right +
+      get(dot_product(momentum_right_past, momentum_right_past)) /
+          (2. * mass_right) -
+      mass_left * mass_right / (2. * get(separation_past));
+  const auto pn_comformal_factor_past_plus =
+      1. + E_left_past / (2. * get(distance_left_past)) +
+      E_right_past / (2. * get(distance_right_past));
+  const auto pn_comformal_factor_past_minus =
+      1. - E_left_past / (2. * get(distance_left_past)) -
+      E_right_past / (2. * get(distance_right_past));
+  const auto function =
+      1. / (pn_comformal_factor_past_minus * pn_comformal_factor_past_plus);
+  for (size_t i = 0; i < 3; ++i) {
+    shift_excess->get(i) =
+        function * pow<4>(pn_comformal_factor_past_plus) *
+        (normal_left_past.get(i) *
+             (get(distance_right_past) / get(distance_left_past)) +
+         normal_right_past.get(i) *
+             (get(distance_left_past) / get(distance_right_past)));
+  }
 }
 
 template <typename DataType>
