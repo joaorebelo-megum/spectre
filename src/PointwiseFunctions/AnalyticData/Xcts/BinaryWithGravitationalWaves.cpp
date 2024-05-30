@@ -494,7 +494,7 @@ void BinaryWithGravitationalWavesVariables<DataType>::operator()(
       1. / (pn_comformal_factor_past_minus * pn_comformal_factor_past_plus);
   for (size_t i = 0; i < 3; ++i) {
     shift_excess->get(i) =
-        function * pow<4>(pn_comformal_factor_past_plus) *
+        function * 1 / (pow<4>(pn_comformal_factor_past_plus)) *
         (normal_left_past.get(i) *
              (get(distance_right_past) / get(distance_left_past)) +
          normal_right_past.get(i) *
