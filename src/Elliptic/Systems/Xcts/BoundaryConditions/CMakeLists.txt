@@ -12,6 +12,7 @@ spectre_target_sources(
   ApparentHorizonForBwGW.cpp
   Flatness.cpp
   Robin.cpp
+  InnerForBwGW.cpp
   )
 
 spectre_target_headers(
@@ -23,6 +24,7 @@ spectre_target_headers(
   Factory.hpp
   Flatness.hpp
   Robin.hpp
+  InnerForBwGW.hpp
   )
 
 target_link_libraries(
