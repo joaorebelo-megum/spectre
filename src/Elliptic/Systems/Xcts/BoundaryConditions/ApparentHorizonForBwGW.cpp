@@ -137,7 +137,7 @@ void negative_expansion_quantities(
                  //: Frame::Inertial>,
                  //   tmpl::size_t<3>, Frame::Inertial>,
                  Xcts::Tags::LapseTimesConformalFactorMinusOne<DataVector>,
-                 Xcts::Tags::ShiftBackground<DataVector, 3, Frame::Inertial>,
+                 Xcts::Tags::ShiftExcess<DataVector, 3, Frame::Inertial>,
                  Xcts::AnalyticData::detail::Tags::
                      PostNewtonianExtrinsicCurvature<DataVector>>;
   const auto solution_vars =
@@ -153,7 +153,7 @@ void negative_expansion_quantities(
       get<Xcts::Tags::LapseTimesConformalFactorMinusOne<DataVector>>(
           solution_vars);
   const auto& shift =
-      get<Xcts::Tags::ShiftBackground<DataVector, 3, Frame::Inertial>>(
+      get<Xcts::Tags::ShiftExcess<DataVector, 3, Frame::Inertial>>(
           solution_vars);
   const auto& extrinsic_curvature =
       get<Xcts::AnalyticData::detail::Tags::PostNewtonianExtrinsicCurvature<
