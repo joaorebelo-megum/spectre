@@ -459,7 +459,7 @@ void BinaryWithGravitationalWavesVariables<DataType>::operator()(
   const auto lapse =
       sqrt(-1 / (-1 / square(pn_lapse) +
                  square(function) / pow<4>(pn_comformal_factor_past_plus)));*/
-  get(*lapse_times_conformal_factor_minus_one) = 0.;
+  get(*lapse_times_conformal_factor_minus_one) = -1.;
 }
 
 template <typename DataType>
@@ -475,6 +475,7 @@ void BinaryWithGravitationalWavesVariables<DataType>::operator()(
   const auto momentum_right_past = get_past_momentum_right(present_time);
   const auto normal_left_past = get_past_normal_left(present_time);
   const auto normal_right_past = get_past_normal_right(present_time);
+  /*
   const DataType E_left_past =
       mass_left +
       get(dot_product(momentum_left_past, momentum_left_past)) /
@@ -503,6 +504,8 @@ void BinaryWithGravitationalWavesVariables<DataType>::operator()(
          normal_right_past.get(i) *
              (get(distance_left_past) / get(distance_right_past)));
   }
+  */
+  std::fill(shift_excess->begin(), shift_excess->end(), 0.);
   const auto angular_velocity =
       2 * momentum_left_past.get(1) / (mass_left * get(separation_past));
   shift_excess->get(0) += angular_velocity * get<1>(x);
