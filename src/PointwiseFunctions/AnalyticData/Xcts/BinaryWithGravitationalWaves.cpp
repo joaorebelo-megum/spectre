@@ -459,7 +459,7 @@ void BinaryWithGravitationalWavesVariables<DataType>::operator()(
   const auto lapse =
       sqrt(-1 / (-1 / square(pn_lapse) +
                  square(function) / pow<4>(pn_comformal_factor_past_plus)));*/
-  get(*lapse_times_conformal_factor_minus_one) = -1.;
+  get(*lapse_times_conformal_factor_minus_one) = -.9999;
 }
 
 template <typename DataType>
