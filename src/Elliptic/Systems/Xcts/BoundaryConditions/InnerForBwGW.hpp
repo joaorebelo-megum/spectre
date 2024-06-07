@@ -11,6 +11,7 @@
 
 #include "DataStructures/Tensor/TypeAliases.hpp"
 #include "Domain/Tags.hpp"
+#include "Domain/Tags/FaceNormal.hpp"
 #include "Elliptic/BoundaryConditions/BoundaryCondition.hpp"
 #include "Elliptic/BoundaryConditions/BoundaryConditionType.hpp"
 #include "Elliptic/Systems/Xcts/FluxesAndSources.hpp"
@@ -76,10 +77,15 @@ class InnerForBwGW : public elliptic::BoundaryConditions::BoundaryCondition<3> {
         "The radius of the outer boundary of the computational domain.";
     using type = double;
   };
-  using options = tmpl::list<MassLeft, MassRight, XCoordsLeft, XCoordsRight,
-                             AttenuationParameter, OuterRadius>;
+  struct BoundaryCondition {
+    static constexpr Options::String help = "Boundary Condition Type.";
+    using type = elliptic::BoundaryConditionType;
+  };
+  using options =
+      tmpl::list<MassLeft, MassRight, XCoordsLeft, XCoordsRight,
+                 AttenuationParameter, OuterRadius, BoundaryCondition>;
   static constexpr Options::String help =
-      "Impose Schwarzschild isotropic with transformation.";
+      "Impose Schwarzschild isotropic in Inner Boundary.";
 
   InnerForBwGW() = default;
   InnerForBwGW(const InnerForBwGW&) = delete;
@@ -98,27 +104,28 @@ class InnerForBwGW : public elliptic::BoundaryConditions::BoundaryCondition<3> {
       const override {
     return std::make_unique<InnerForBwGW>(mass_left_, mass_right_, xcoord_left_,
                                           xcoord_right_, attenuation_parameter_,
-                                          outer_radius_);
+                                          outer_radius_, boundary_);
   }
 
   InnerForBwGW(double mass_left, double mass_right, double xcoord_left,
                double xcoord_right, double attenuation_parameter,
-               double outer_radius, const Options::Context& context = {});
+               double outer_radius, elliptic::BoundaryConditionType boundary,
+               const Options::Context& context = {});
 
   std::vector<elliptic::BoundaryConditionType> boundary_condition_types()
       const override {
     return {// Conformal factor
-            elliptic::BoundaryConditionType::Dirichlet,
+            boundary_,
             // Lapse times conformal factor
-            elliptic::BoundaryConditionType::Dirichlet,
+            boundary_,
             // Shift
-            elliptic::BoundaryConditionType::Dirichlet,
-            elliptic::BoundaryConditionType::Dirichlet,
-            elliptic::BoundaryConditionType::Dirichlet};
+            boundary_, boundary_, boundary_};
   }
 
   using argument_tags =
-      tmpl::list<domain::Tags::Coordinates<3, Frame::Inertial>>;
+      tmpl::list<domain::Tags::Coordinates<3, Frame::Inertial>,
+                 ::Tags::Normalized<
+                     domain::Tags::UnnormalizedFaceNormal<3, Frame::Inertial>>>;
   using volume_tags = tmpl::list<>;
 
   void apply(
@@ -129,7 +136,8 @@ class InnerForBwGW : public elliptic::BoundaryConditions::BoundaryCondition<3> {
       gsl::not_null<Scalar<DataVector>*>
           n_dot_lapse_times_conformal_factor_gradient,
       gsl::not_null<tnsr::I<DataVector, 3>*> n_dot_longitudinal_shift_excess,
-      const tnsr::I<DataVector, 3>& x) const;
+      const tnsr::I<DataVector, 3>& x,
+      const tnsr::i<DataVector, 3>& face_normal) const;
 
   using argument_tags_linearized = tmpl::list<>;
   using volume_tags_linearized = tmpl::list<>;
@@ -156,6 +164,7 @@ class InnerForBwGW : public elliptic::BoundaryConditions::BoundaryCondition<3> {
   double xcoord_right_{std::numeric_limits<double>::signaling_NaN()};
   double attenuation_parameter_{std::numeric_limits<double>::signaling_NaN()};
   double outer_radius_{std::numeric_limits<double>::signaling_NaN()};
+  elliptic::BoundaryConditionType boundary_{};
 
   std::optional<
       std::unique_ptr<Xcts::AnalyticData::BinaryWithGravitationalWaves>>

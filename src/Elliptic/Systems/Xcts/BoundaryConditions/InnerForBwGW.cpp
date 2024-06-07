@@ -20,13 +20,15 @@ template <Xcts::Geometry ConformalGeometry>
 InnerForBwGW<ConformalGeometry>::InnerForBwGW(
     double mass_left, double mass_right, double xcoord_left,
     double xcoord_right, double attenuation_parameter, double outer_radius,
+    elliptic::BoundaryConditionType boundary,
     const Options::Context& /*context*/)
     : mass_left_(mass_left),
       mass_right_(mass_right),
       xcoord_left_(xcoord_left),
       xcoord_right_(xcoord_right),
       attenuation_parameter_(attenuation_parameter),
-      outer_radius_(outer_radius) {
+      outer_radius_(outer_radius),
+      boundary_(boundary) {
   solution_ =
       std::make_unique<Xcts::AnalyticData::BinaryWithGravitationalWaves>(
           mass_left, mass_right, xcoord_left, xcoord_right,
@@ -36,7 +38,7 @@ InnerForBwGW<ConformalGeometry>::InnerForBwGW(
 namespace {
 
 template <Xcts::Geometry ConformalGeometry>
-void implement_apply(
+void implement_apply_dirichlet(
     const gsl::not_null<Scalar<DataVector>*> conformal_factor_minus_one,
     const gsl::not_null<Scalar<DataVector>*>
         lapse_times_conformal_factor_minus_one,
@@ -64,6 +66,21 @@ void implement_apply(
   }
 }
 
+template <Xcts::Geometry ConformalGeometry>
+void implement_apply_neumann(
+    const gsl::not_null<Scalar<DataVector>*> n_dot_conformal_factor_gradient,
+    const gsl::not_null<Scalar<DataVector>*>
+        n_dot_lapse_times_conformal_factor_gradient,
+    const gsl::not_null<tnsr::I<DataVector, 3>*>
+        n_dot_longitudinal_shift_excess,
+    const tnsr::i<DataVector, 3>& face_normal) {
+  get(*n_dot_conformal_factor_gradient) = 0.;
+  get(*n_dot_lapse_times_conformal_factor_gradient) = 1.;
+  for (size_t i = 0; i < 3; ++i) {
+    n_dot_longitudinal_shift_excess->get(i) = 0.;
+  }
+}
+
 }  // namespace
 
 template <Xcts::Geometry ConformalGeometry>
@@ -72,16 +89,23 @@ void InnerForBwGW<ConformalGeometry>::apply(
     const gsl::not_null<Scalar<DataVector>*>
         lapse_times_conformal_factor_minus_one,
     const gsl::not_null<tnsr::I<DataVector, 3>*> shift_excess,
+    const gsl::not_null<Scalar<DataVector>*> n_dot_conformal_factor_gradient,
     const gsl::not_null<Scalar<DataVector>*>
-    /*n_dot_conformal_factor_gradient*/,
-    const gsl::not_null<Scalar<DataVector>*>
-    /*n_dot_lapse_times_conformal_factor_gradient*/,
+        n_dot_lapse_times_conformal_factor_gradient,
     const gsl::not_null<tnsr::I<DataVector, 3>*>
-    /*n_dot_longitudinal_shift_excess*/,
-    const tnsr::I<DataVector, 3>& x) const {
-  implement_apply<ConformalGeometry>(conformal_factor_minus_one,
-                                     lapse_times_conformal_factor_minus_one,
-                                     shift_excess, solution_, x);
+        n_dot_longitudinal_shift_excess,
+    const tnsr::I<DataVector, 3>& x,
+    const tnsr::i<DataVector, 3>& face_normal) const {
+  if (boundary_ == elliptic::BoundaryConditionType::Dirichlet) {
+    implement_apply_dirichlet<ConformalGeometry>(
+        conformal_factor_minus_one, lapse_times_conformal_factor_minus_one,
+        shift_excess, solution_, x);
+  } else {
+    implement_apply_neumann<ConformalGeometry>(
+        n_dot_conformal_factor_gradient,
+        n_dot_lapse_times_conformal_factor_gradient,
+        n_dot_longitudinal_shift_excess, face_normal);
+  }
 }
 
 template <Xcts::Geometry ConformalGeometry>
