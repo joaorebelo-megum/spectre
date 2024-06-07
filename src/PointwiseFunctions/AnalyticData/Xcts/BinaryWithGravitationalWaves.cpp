@@ -455,6 +455,7 @@ void BinaryWithGravitationalWavesVariables<DataType>::operator()(
     const gsl::not_null<tnsr::I<DataType, Dim>*> shift_excess,
     const gsl::not_null<Cache*> /*cache*/,
     Xcts::Tags::ShiftExcess<DataType, Dim, Frame::Inertial> /*meta*/) const {
+  /*
   DataType present_time(get_size(get<0>(x)), max_time_interpolator);
   const auto distance_left_past = get_past_distance_left(present_time);
   const auto distance_right_past = get_past_distance_right(present_time);
@@ -463,7 +464,6 @@ void BinaryWithGravitationalWavesVariables<DataType>::operator()(
   const auto momentum_right_past = get_past_momentum_right(present_time);
   const auto normal_left_past = get_past_normal_left(present_time);
   const auto normal_right_past = get_past_normal_right(present_time);
-  /*
   const DataType E_left_past =
       mass_left +
       get(dot_product(momentum_left_past, momentum_left_past)) /
