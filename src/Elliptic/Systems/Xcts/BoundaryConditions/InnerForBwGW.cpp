@@ -75,7 +75,7 @@ void implement_apply_neumann(
         n_dot_longitudinal_shift_excess,
     const tnsr::i<DataVector, 3>& face_normal) {
   get(*n_dot_conformal_factor_gradient) = 0.;
-  get(*n_dot_lapse_times_conformal_factor_gradient) = 1.;
+  get(*n_dot_lapse_times_conformal_factor_gradient) = 0.;
   for (size_t i = 0; i < 3; ++i) {
     n_dot_longitudinal_shift_excess->get(i) = 0.;
   }
@@ -100,7 +100,7 @@ void InnerForBwGW<ConformalGeometry>::apply(
     implement_apply_dirichlet<ConformalGeometry>(
         conformal_factor_minus_one, lapse_times_conformal_factor_minus_one,
         shift_excess, solution_, x);
-  } else {
+  } else if (boundary_ == elliptic::BoundaryConditionType::Neumann) {
     implement_apply_neumann<ConformalGeometry>(
         n_dot_conformal_factor_gradient,
         n_dot_lapse_times_conformal_factor_gradient,
