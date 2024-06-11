@@ -455,7 +455,6 @@ void BinaryWithGravitationalWavesVariables<DataType>::operator()(
     const gsl::not_null<tnsr::I<DataType, Dim>*> shift_excess,
     const gsl::not_null<Cache*> /*cache*/,
     Xcts::Tags::ShiftExcess<DataType, Dim, Frame::Inertial> /*meta*/) const {
-  /*
   DataType present_time(get_size(get<0>(x)), max_time_interpolator);
   const auto distance_left_past = get_past_distance_left(present_time);
   const auto distance_right_past = get_past_distance_right(present_time);
@@ -464,6 +463,7 @@ void BinaryWithGravitationalWavesVariables<DataType>::operator()(
   const auto momentum_right_past = get_past_momentum_right(present_time);
   const auto normal_left_past = get_past_normal_left(present_time);
   const auto normal_right_past = get_past_normal_right(present_time);
+  /*
   const DataType E_left_past =
       mass_left +
       get(dot_product(momentum_left_past, momentum_left_past)) /
@@ -498,6 +498,23 @@ void BinaryWithGravitationalWavesVariables<DataType>::operator()(
   shift_excess->get(1) += -angular_velocity * get<0>(x);
   */
   std::fill(shift_excess->begin(), shift_excess->end(), 0.);
+  for (size_t i = 0; i < 3; ++i) {
+    shift_excess->get(i) -=
+        4. * (momentum_left_past.get(i) / get(distance_left_past) +
+              momentum_right_past.get(i) / get(distance_right_past));
+    for (size_t j = 0; j < 3; ++j) {
+      shift_excess->get(i) +=
+          .5 * momentum_left_past.get(j) *
+              (-normal_left_past.get(i) * normal_left_past.get(j) /
+               get(distance_left_past)) +
+          .5 * momentum_right_past.get(j) *
+              (-normal_right_past.get(i) * normal_right_past.get(j) /
+               get(distance_right_past));
+    }
+    shift_excess->get(i) +=
+        0.5 * momentum_left_past.get(i) / get(distance_left_past) +
+        0.5 * momentum_right_past.get(i) / get(distance_right_past);
+  }
 }
 
 template <typename DataType>
@@ -2013,7 +2030,7 @@ void BinaryWithGravitationalWaves::hamiltonian_system(
                   (x[2] * x[3] - x[0] * x[5]) * (x[2] * x[3] - x[0] * x[5]) +
                   (x[0] * x[4] - x[1] * x[3]) * (x[0] * x[4] - x[1] * x[3]));
   double w =
-      reduced_mass / (total_mass * mass_left()) * sqrt(pdotp) / sqrt(qdotq);
+      reduced_mass / (total_mass * mass_left()) * L / (total_mass * qdotq);
   double vw = std::cbrt(total_mass * w);
   double gamma_Euler = 0.57721566490153286060651209008240243104215933593992;
 
