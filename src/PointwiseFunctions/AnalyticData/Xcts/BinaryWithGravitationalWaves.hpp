@@ -105,6 +105,7 @@ template <typename DataType>
 struct RootFinderBracketTimeUpper : db::SimpleTag {
   using type = Scalar<DataType>;
 };
+
 }  // namespace Tags
 
 template <typename DataType>
@@ -385,6 +386,8 @@ struct BinaryWithGravitationalWavesVariables
  private:
   double max_time_interpolator = std::numeric_limits<double>::signaling_NaN();
   void interpolate_past_history();
+  DataType find_areal_distance_left(DataType r) const;
+  DataType find_areal_distance_right(DataType r) const;
   DataType find_retarded_time_left(DataType t0) const;
   DataType find_retarded_time_right(DataType t0) const;
   Scalar<DataType> get_past_distance_left(DataType t) const;
@@ -410,6 +413,9 @@ struct BinaryWithGravitationalWavesVariables
   tnsr::ii<DataType, 3> get_past_present_term(DataType t) const;
   tnsr::ii<DataType, 3> get_past_past_term(DataType t) const;
   tnsr::ii<DataType, 3> get_past_integral_term(DataType t) const;
+  Scalar<DataType> get_past_conformal_factor(DataType t) const;
+  Scalar<DataType> get_past_lapse(DataType t) const;
+  tnsr::I<DataType, 3> get_past_shift(DataType t) const;
 };
 
 }  // namespace detail

@@ -15,6 +15,7 @@
 #include "DataStructures/Tensor/EagerMath/Trace.hpp"
 #include "DataStructures/Tensor/Tensor.hpp"
 #include "Elliptic/Systems/Xcts/Tags.hpp"
+#include "NumericalAlgorithms/Integration/GslQuadAdaptive.hpp"
 #include "NumericalAlgorithms/RootFinding/TOMS748.hpp"
 #include "PointwiseFunctions/AnalyticData/Xcts/CommonVariables.tpp"
 #include "PointwiseFunctions/Elasticity/Strain.hpp"
@@ -282,8 +283,7 @@ void BinaryWithGravitationalWavesVariables<DataType>::operator()(
     const gsl::not_null<Cache*> /*cache*/,
     detail::Tags::RootFinderBracketTimeUpper<DataType> /*meta*/) const {
   get(*rootfinder_bracket_time_upper) = past_time.back();
-
-}  // namespace detail
+}
 
 template <typename DataType>
 void BinaryWithGravitationalWavesVariables<DataType>::operator()(
@@ -339,6 +339,10 @@ void BinaryWithGravitationalWavesVariables<DataType>::operator()(
     const gsl::not_null<tnsr::I<DataType, 3>*> shift_background,
     const gsl::not_null<Cache*> /*cache*/,
     Xcts::Tags::ShiftBackground<DataType, 3, Frame::Inertial> /*meta*/) const {
+  std::fill(shift_background->begin(), shift_background->end(), 0.);
+
+  // PN shift
+  /*
   DataType present_time(get_size(get<0>(x)), max_time_interpolator);
   const auto distance_left_past = get_past_distance_left(present_time);
   const auto distance_right_past = get_past_distance_right(present_time);
@@ -347,7 +351,6 @@ void BinaryWithGravitationalWavesVariables<DataType>::operator()(
   const auto momentum_right_past = get_past_momentum_right(present_time);
   const auto normal_left_past = get_past_normal_left(present_time);
   const auto normal_right_past = get_past_normal_right(present_time);
-  std::fill(shift_background->begin(), shift_background->end(), 0.);
   for (size_t i = 0; i < 3; ++i) {
     shift_background->get(i) -=
         4. * (momentum_left_past.get(i) / get(distance_left_past) +
@@ -364,6 +367,28 @@ void BinaryWithGravitationalWavesVariables<DataType>::operator()(
     shift_background->get(i) +=
         0.5 * momentum_left_past.get(i) / get(distance_left_past) +
         0.5 * momentum_right_past.get(i) / get(distance_right_past);
+  }
+  */
+  // Horizon Penetrating Lapse
+
+  DataType present_time(get_size(get<0>(x)), max_time_interpolator);
+  const auto distance_left_past = get_past_distance_left(present_time);
+  const auto distance_right_past = get_past_distance_right(present_time);
+  const auto areal_distance_left =
+      find_areal_distance_left(get(distance_left_past));
+  const auto areal_distance_right =
+      find_areal_distance_right(get(distance_right_past));
+  const auto normal_left = get_past_normal_left(present_time);
+  const auto normal_right = get_past_normal_right(present_time);
+  const DataType shift_r_left = .75 * sqrt(3) * square(mass_left) *
+                                get(distance_left_past) /
+                                pow(areal_distance_left, 3);
+  const DataType shift_r_right = .75 * sqrt(3) * square(mass_right) *
+                                 get(distance_right_past) /
+                                 pow(areal_distance_right, 3);
+  for (size_t i = 0; i < 3; ++i) {
+    shift_background->get(i) +=
+        shift_r_left * normal_left.get(i) + shift_r_right * normal_right.get(i);
   }
 }
 
@@ -462,25 +487,8 @@ void BinaryWithGravitationalWavesVariables<DataType>::operator()(
     const gsl::not_null<Cache*> /*cache*/,
     Xcts::Tags::ConformalFactorMinusOne<DataType> /*meta*/) const {
   DataType present_time(get_size(get<0>(x)), max_time_interpolator);
-  const auto distance_left_past = get_past_distance_left(present_time);
-  const auto distance_right_past = get_past_distance_right(present_time);
-  const auto separation_past = get_past_separation(present_time);
-  const auto momentum_left_past = get_past_momentum_left(present_time);
-  const auto momentum_right_past = get_past_momentum_right(present_time);
-  const DataType E_left_past =
-      mass_left +
-      get(dot_product(momentum_left_past, momentum_left_past)) /
-          (2. * mass_left) -
-      mass_left * mass_right / (2. * get(separation_past));
-  const DataType E_right_past =
-      mass_right +
-      get(dot_product(momentum_right_past, momentum_right_past)) /
-          (2. * mass_right) -
-      mass_left * mass_right / (2. * get(separation_past));
-  const auto pn_comformal_factor_past =
-      1. + E_left_past / (2. * get(distance_left_past)) +
-      E_right_past / (2. * get(distance_right_past));
-  get(*conformal_factor_minus_one) = pn_comformal_factor_past - 1.0;
+  const auto conformal_factor_past = get_past_conformal_factor(present_time);
+  get(*conformal_factor_minus_one) = get(conformal_factor_past) - 1.0;
 }
 
 template <typename DataType>
@@ -490,26 +498,10 @@ void BinaryWithGravitationalWavesVariables<DataType>::operator()(
     const gsl::not_null<Cache*> /*cache*/,
     Xcts::Tags::LapseTimesConformalFactorMinusOne<DataType> /*meta*/) const {
   DataType present_time(get_size(get<0>(x)), max_time_interpolator);
-  const auto distance_left_past = get_past_distance_left(present_time);
-  const auto distance_right_past = get_past_distance_right(present_time);
-  const auto separation_past = get_past_separation(present_time);
-  const auto momentum_left_past = get_past_momentum_left(present_time);
-  const auto momentum_right_past = get_past_momentum_right(present_time);
-  const DataType E_left_past =
-      mass_left +
-      get(dot_product(momentum_left_past, momentum_left_past)) /
-          (2. * mass_left) -
-      mass_left * mass_right / (2. * get(separation_past));
-  const DataType E_right_past =
-      mass_right +
-      get(dot_product(momentum_right_past, momentum_right_past)) /
-          (2. * mass_right) -
-      mass_left * mass_right / (2. * get(separation_past));
-  const auto pn_comformal_factor_past =
-      1. + E_left_past / (2. * get(distance_left_past)) +
-      E_right_past / (2. * get(distance_right_past));
+  const auto lapse = get_past_lapse(present_time);
+  const auto conformal_factor = get_past_conformal_factor(present_time);
   get(*lapse_times_conformal_factor_minus_one) =
-      (2. - pn_comformal_factor_past) - 1.0;
+      get(lapse) * get(conformal_factor) - 1.;
 }
 
 template <typename DataType>
@@ -518,53 +510,10 @@ void BinaryWithGravitationalWavesVariables<DataType>::operator()(
     const gsl::not_null<Cache*> /*cache*/,
     Xcts::Tags::ShiftExcess<DataType, Dim, Frame::Inertial> /*meta*/) const {
   DataType present_time(get_size(get<0>(x)), max_time_interpolator);
-  const auto distance_left_past = get_past_distance_left(present_time);
-  const auto distance_right_past = get_past_distance_right(present_time);
-  const auto separation_past = get_past_separation(present_time);
-  const auto momentum_left_past = get_past_momentum_left(present_time);
-  const auto momentum_right_past = get_past_momentum_right(present_time);
-  const auto normal_left_past = get_past_normal_left(present_time);
-  const auto normal_right_past = get_past_normal_right(present_time);
-  std::fill(shift_excess->begin(), shift_excess->end(), 0.);
-  /*for (size_t i = 0; i < 3; ++i) {
-    shift_excess->get(i) -=
-        4. * (momentum_left_past.get(i) / get(distance_left_past) +
-              momentum_right_past.get(i) / get(distance_right_past));
-    for (size_t j = 0; j < 3; ++j) {
-      shift_excess->get(i) +=
-          .5 * momentum_left_past.get(j) *
-              (-normal_left_past.get(i) * normal_left_past.get(j) /
-               get(distance_left_past)) +
-          .5 * momentum_right_past.get(j) *
-              (-normal_right_past.get(i) * normal_right_past.get(j) /
-               get(distance_right_past));
-    }
-    shift_excess->get(i) +=
-        0.5 * momentum_left_past.get(i) / get(distance_left_past) +
-        0.5 * momentum_right_past.get(i) / get(distance_right_past);
+  const auto shift_excess_aux = get_past_shift(present_time);
+  for (size_t i = 0; i < 3; ++i) {
+    shift_excess->get(i) = shift_excess_aux.get(i);
   }
-  //------------------------------------------------------------------
-  const double total_mass = mass_left + mass_right;
-  const double reduced_mass = mass_left * mass_right / total_mass;
-
-  const auto angular_velocity =
-       sqrt(64. * cube(get(separation_past))/total_mass /
-            pow<6>(1 + 2 * get(separation_past)/total_mass)
-        + reduced_mass*total_mass / pow<4>(get(separation_past))
-        + ( square(reduced_mass)/total_mass - 5./8. * reduced_mass ) *
-        square(total_mass)/pow<5>(get(separation_past))
-       );
-
-  const auto angular_velocity_left =
-      2 * abs(momentum_left_past.get(1)) / (mass_left * get(separation_past));
-  const auto angular_velocity_right =
-      2 * abs(momentum_right_past.get(1)) / (mass_right * get(separation_past));
-  const auto angular_velocity = 1./reduced_mass *
-      (mass_left * angular_velocity_left + mass_right * angular_velocity_right);
-
-  shift_excess->get(0) += angular_velocity * get<1>(x);
-  shift_excess->get(1) += -angular_velocity * get<0>(x);
-  */
 }
 
 template <typename DataType>
@@ -687,6 +636,58 @@ BinaryWithGravitationalWavesVariables<DataType>::find_retarded_time_right(
         }
 
         return get(magnitude(v)) + time - t0[i];
+      },
+      bracket_lower, bracket_upper, 1e-8, 1e-10);
+}
+
+template <typename DataType>
+DataType
+BinaryWithGravitationalWavesVariables<DataType>::find_areal_distance_left(
+    DataType r) const {
+  DataType bracket_lower(get_size(r), 1.5 * mass_left);
+  DataType bracket_upper(get_size(r), 1e9);
+  return RootFinder::toms748<true>(
+      [this, r](const auto areal_radius, const size_t i) {
+        double iso_radius =
+            .25 *
+            (2. * areal_radius + mass_left +
+             sqrt(4. * square(areal_radius) + 4. * areal_radius * mass_left +
+                  3. * square(mass_left))) *
+            std::pow((4. + 3. * sqrt(2.)) *
+                         (2. * areal_radius - 3. * mass_left) /
+                         (8. * areal_radius + 6. * mass_left +
+                          3. * sqrt(8. * square(areal_radius) +
+                                    8. * areal_radius * mass_left +
+                                    6. * square(mass_left))),
+                     1. / sqrt(2.));
+
+        return iso_radius - r[i];
+      },
+      bracket_lower, bracket_upper, 1e-8, 1e-10);
+}
+
+template <typename DataType>
+DataType
+BinaryWithGravitationalWavesVariables<DataType>::find_areal_distance_right(
+    DataType r) const {
+  DataType bracket_lower(get_size(r), 1.5 * mass_right);
+  DataType bracket_upper(get_size(r), 1e9);
+  return RootFinder::toms748<true>(
+      [this, r](const auto areal_radius, const size_t i) {
+        double iso_radius =
+            .25 *
+            (2. * areal_radius + mass_right +
+             sqrt(4. * square(areal_radius) + 4. * areal_radius * mass_right +
+                  3. * square(mass_right))) *
+            std::pow((4. + 3. * sqrt(2.)) *
+                         (2. * areal_radius - 3. * mass_right) /
+                         (8. * areal_radius + 6. * mass_right +
+                          3. * sqrt(8. * square(areal_radius) +
+                                    8. * areal_radius * mass_right +
+                                    6. * square(mass_right))),
+                     1. / sqrt(2.));
+
+        return iso_radius - r[i];
       },
       bracket_lower, bracket_upper, 1e-8, 1e-10);
 }
@@ -1058,35 +1059,18 @@ template <typename DataType>
 tnsr::ii<DataType, 3> BinaryWithGravitationalWavesVariables<
     DataType>::get_past_pn_extrinsic_curvature(DataType t) const {
   const auto pn_conjugate_momentum3_past = get_past_pn_conjugate_momentum3(t);
-  const auto distance_left_past = get_past_distance_left(t);
-  const auto distance_right_past = get_past_distance_right(t);
-  const auto separation_past = get_past_separation(t);
-  const auto momentum_left_past = get_past_momentum_left(t);
-  const auto momentum_right_past = get_past_momentum_right(t);
+  const auto conformal_factor_past = get_past_conformal_factor(t);
   tnsr::ii<DataType, 3> pn_extrinsic_curvature_past{t.size()};
-  const DataType E_left_past =
-      mass_left +
-      get(dot_product(momentum_left_past, momentum_left_past)) /
-          (2. * mass_left) -
-      mass_left * mass_right / (2. * get(separation_past));
-  const DataType E_right_past =
-      mass_right +
-      get(dot_product(momentum_right_past, momentum_right_past)) /
-          (2. * mass_right) -
-      mass_left * mass_right / (2. * get(separation_past));
-  const auto pn_comformal_factor_past =
-      1. + E_left_past / (2. * get(distance_left_past)) +
-      E_right_past / (2. * get(distance_right_past));
-  const auto one_over_pn_comformal_factor_to_ten_past =
-      1. / (pn_comformal_factor_past * pn_comformal_factor_past *
-            pn_comformal_factor_past * pn_comformal_factor_past *
-            pn_comformal_factor_past * pn_comformal_factor_past *
-            pn_comformal_factor_past * pn_comformal_factor_past *
-            pn_comformal_factor_past * pn_comformal_factor_past);
+  const auto one_over_comformal_factor_to_ten_past =
+      1. / (get(conformal_factor_past) * get(conformal_factor_past) *
+            get(conformal_factor_past) * get(conformal_factor_past) *
+            get(conformal_factor_past) * get(conformal_factor_past) *
+            get(conformal_factor_past) * get(conformal_factor_past) *
+            get(conformal_factor_past) * get(conformal_factor_past));
   for (size_t i = 0; i < 3; ++i) {
     for (size_t j = 0; j <= i; ++j) {
       pn_extrinsic_curvature_past.get(i, j) =
-          -one_over_pn_comformal_factor_to_ten_past *
+          -one_over_comformal_factor_to_ten_past *
           pn_conjugate_momentum3_past.get(i, j);
     }
   }
@@ -1109,38 +1093,17 @@ BinaryWithGravitationalWavesVariables<DataType>::get_past_conformal_metric(
     DataType t) const {
   const auto distance_left_past = get_past_distance_left(t);
   const auto distance_right_past = get_past_distance_right(t);
-  const auto separation_past = get_past_separation(t);
-  const auto momentum_left_past = get_past_momentum_left(t);
-  const auto momentum_right_past = get_past_momentum_right(t);
-  tnsr::ii<DataType, 3> conformal_metric_past{t.size()};
-  const DataType E_left_past =
-      mass_left +
-      get(dot_product(momentum_left_past, momentum_left_past)) /
-          (2. * mass_left) -
-      mass_left * mass_right / (2. * get(separation_past));
-  const DataType E_right_past =
-      mass_right +
-      get(dot_product(momentum_right_past, momentum_right_past)) /
-          (2. * mass_right) -
-      mass_left * mass_right / (2. * get(separation_past));
-  const auto pn_comformal_factor_past =
-      1. + E_left_past / (2. * get(distance_left_past)) +
-      E_right_past / (2. * get(distance_right_past));
-  const auto Fat =
-      1. / ((1. + attenuation_parameter * attenuation_parameter * mass_left *
-                      mass_left /
-                      (get(distance_left_past) * get(distance_left_past))) *
-            (1. + attenuation_parameter * attenuation_parameter * mass_right *
-                      mass_right /
-                      (get(distance_right_past) * get(distance_right_past))));
+  const auto conformal_factor_past = get_past_conformal_factor(t);
   const auto radiative_term = get_past_radiative_term(t);
+  tnsr::ii<DataType, 3> conformal_metric_past{t.size()};
   for (size_t i = 0; i < 3; ++i) {
     for (size_t j = 0; j <= i; ++j) {
-      conformal_metric_past.get(i, j) = Fat * radiative_term.get(i, j);
+      conformal_metric_past.get(i, j) =
+          radiative_term.get(i, j) /
+          (get(conformal_factor_past) * get(conformal_factor_past) *
+           get(conformal_factor_past) * get(conformal_factor_past));
     }
-    conformal_metric_past.get(i, i) +=
-        pn_comformal_factor_past * pn_comformal_factor_past *
-        pn_comformal_factor_past * pn_comformal_factor_past;
+    conformal_metric_past.get(i, i) += 1.;
   }
   return conformal_metric_past;
 }

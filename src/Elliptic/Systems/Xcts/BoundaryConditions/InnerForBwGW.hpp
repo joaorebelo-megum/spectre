@@ -136,6 +136,10 @@ class InnerForBwGW : public elliptic::BoundaryConditions::BoundaryCondition<3> {
       gsl::not_null<Scalar<DataVector>*>
           n_dot_lapse_times_conformal_factor_gradient,
       gsl::not_null<tnsr::I<DataVector, 3>*> n_dot_longitudinal_shift_excess,
+      const tnsr::i<DataVector, 3>& deriv_conformal_factor_correction,
+      const tnsr::i<DataVector, 3>&
+          deriv_lapse_times_conformal_factor_correction,
+      const tnsr::iJ<DataVector, 3>& deriv_shift_excess_correction,
       const tnsr::I<DataVector, 3>& x,
       const tnsr::i<DataVector, 3>& face_normal) const;
 
@@ -152,7 +156,11 @@ class InnerForBwGW : public elliptic::BoundaryConditions::BoundaryCondition<3> {
       gsl::not_null<Scalar<DataVector>*>
           n_dot_lapse_times_conformal_factor_gradient_correction,
       gsl::not_null<tnsr::I<DataVector, 3>*>
-          n_dot_longitudinal_shift_excess_correction) const;
+          n_dot_longitudinal_shift_excess_correction,
+      const tnsr::i<DataVector, 3>& deriv_conformal_factor_correction,
+      const tnsr::i<DataVector, 3>&
+          deriv_lapse_times_conformal_factor_correction,
+      const tnsr::iJ<DataVector, 3>& deriv_shift_excess_correction) const;
 
   // NOLINTNEXTLINE(google-runtime-references)
   void pup(PUP::er& p) override;

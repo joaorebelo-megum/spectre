@@ -230,6 +230,10 @@ class ApparentHorizonForBwGW
       gsl::not_null<Scalar<DataVector>*>
           n_dot_lapse_times_conformal_factor_gradient,
       gsl::not_null<tnsr::I<DataVector, 3>*> n_dot_longitudinal_shift_excess,
+      const tnsr::i<DataVector, 3>& deriv_conformal_factor_correction,
+      const tnsr::i<DataVector, 3>&
+          deriv_lapse_times_conformal_factor_correction,
+      const tnsr::iJ<DataVector, 3>& deriv_shift_excess_correction,
       const tnsr::i<DataVector, 3>& face_normal,
       const tnsr::ij<DataVector, 3>& deriv_unnormalized_face_normal,
       const Scalar<DataVector>& face_normal_magnitude,
@@ -246,6 +250,10 @@ class ApparentHorizonForBwGW
       gsl::not_null<Scalar<DataVector>*>
           n_dot_lapse_times_conformal_factor_gradient,
       gsl::not_null<tnsr::I<DataVector, 3>*> n_dot_longitudinal_shift_excess,
+      const tnsr::i<DataVector, 3>& deriv_conformal_factor_correction,
+      const tnsr::i<DataVector, 3>&
+          deriv_lapse_times_conformal_factor_correction,
+      const tnsr::iJ<DataVector, 3>& deriv_shift_excess_correction,
       const tnsr::i<DataVector, 3>& face_normal,
       const tnsr::ij<DataVector, 3>& deriv_unnormalized_face_normal,
       const Scalar<DataVector>& face_normal_magnitude,
@@ -289,6 +297,10 @@ class ApparentHorizonForBwGW
           n_dot_lapse_times_conformal_factor_gradient_correction,
       gsl::not_null<tnsr::I<DataVector, 3>*>
           n_dot_longitudinal_shift_excess_correction,
+      const tnsr::i<DataVector, 3>& deriv_conformal_factor_correction,
+      const tnsr::i<DataVector, 3>&
+          deriv_lapse_times_conformal_factor_correction,
+      const tnsr::iJ<DataVector, 3>& deriv_shift_excess_correction,
       const tnsr::i<DataVector, 3>& face_normal,
       const tnsr::ij<DataVector, 3>& deriv_unnormalized_face_normal,
       const Scalar<DataVector>& face_normal_magnitude,
@@ -310,6 +322,10 @@ class ApparentHorizonForBwGW
           n_dot_lapse_times_conformal_factor_gradient_correction,
       gsl::not_null<tnsr::I<DataVector, 3>*>
           n_dot_longitudinal_shift_excess_correction,
+      const tnsr::i<DataVector, 3>& deriv_conformal_factor_correction,
+      const tnsr::i<DataVector, 3>&
+          deriv_lapse_times_conformal_factor_correction,
+      const tnsr::iJ<DataVector, 3>& deriv_shift_excess_correction,
       const tnsr::i<DataVector, 3>& face_normal,
       const tnsr::ij<DataVector, 3>& deriv_unnormalized_face_normal,
       const Scalar<DataVector>& face_normal_magnitude,

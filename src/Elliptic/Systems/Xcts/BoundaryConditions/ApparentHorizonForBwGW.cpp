@@ -522,6 +522,9 @@ void ApparentHorizonForBwGW<ConformalGeometry>::apply(
         n_dot_lapse_times_conformal_factor_gradient,
     const gsl::not_null<tnsr::I<DataVector, 3>*>
         n_dot_longitudinal_shift_excess,
+    const tnsr::i<DataVector, 3>& /*deriv_conformal_factor*/,
+    const tnsr::i<DataVector, 3>& /*deriv_lapse_times_conformal_factor*/,
+    const tnsr::iJ<DataVector, 3>& /*deriv_shift_excess*/,
     const tnsr::i<DataVector, 3>& face_normal,
     const tnsr::ij<DataVector, 3>& deriv_unnormalized_face_normal,
     const Scalar<DataVector>& face_normal_magnitude,
@@ -550,6 +553,9 @@ void ApparentHorizonForBwGW<ConformalGeometry>::apply(
         n_dot_lapse_times_conformal_factor_gradient,
     const gsl::not_null<tnsr::I<DataVector, 3>*>
         n_dot_longitudinal_shift_excess,
+    const tnsr::i<DataVector, 3>& /*deriv_conformal_factor*/,
+    const tnsr::i<DataVector, 3>& /*deriv_lapse_times_conformal_factor*/,
+    const tnsr::iJ<DataVector, 3>& /*deriv_shift_excess*/,
     const tnsr::i<DataVector, 3>& face_normal,
     const tnsr::ij<DataVector, 3>& deriv_unnormalized_face_normal,
     const Scalar<DataVector>& face_normal_magnitude,
@@ -582,6 +588,9 @@ void ApparentHorizonForBwGW<ConformalGeometry>::apply_linearized(
         n_dot_lapse_times_conformal_factor_gradient_correction,
     const gsl::not_null<tnsr::I<DataVector, 3>*>
         n_dot_longitudinal_shift_excess_correction,
+    const tnsr::i<DataVector, 3>& /*deriv_conformal_factor*/,
+    const tnsr::i<DataVector, 3>& /*deriv_lapse_times_conformal_factor*/,
+    const tnsr::iJ<DataVector, 3>& /*deriv_shift_excess*/,
     const tnsr::i<DataVector, 3>& face_normal,
     const tnsr::ij<DataVector, 3>& deriv_unnormalized_face_normal,
     const Scalar<DataVector>& face_normal_magnitude,
@@ -615,6 +624,9 @@ void ApparentHorizonForBwGW<ConformalGeometry>::apply_linearized(
         n_dot_lapse_times_conformal_factor_gradient_correction,
     const gsl::not_null<tnsr::I<DataVector, 3>*>
         n_dot_longitudinal_shift_excess_correction,
+    const tnsr::i<DataVector, 3>& /*deriv_conformal_factor*/,
+    const tnsr::i<DataVector, 3>& /*deriv_lapse_times_conformal_factor*/,
+    const tnsr::iJ<DataVector, 3>& /*deriv_shift_excess*/,
     const tnsr::i<DataVector, 3>& face_normal,
     const tnsr::ij<DataVector, 3>& deriv_unnormalized_face_normal,
     const Scalar<DataVector>& face_normal_magnitude,
