@@ -19,7 +19,8 @@ namespace Xcts::BoundaryConditions {
 template <Xcts::Geometry ConformalGeometry>
 InnerForBwGW<ConformalGeometry>::InnerForBwGW(
     double mass_left, double mass_right, double xcoord_left,
-    double xcoord_right, double attenuation_parameter, double outer_radius,
+    double xcoord_right, double attenuation_parameter,
+    double attenuation_radius, double outer_radius,
     elliptic::BoundaryConditionType boundary,
     const Options::Context& /*context*/)
     : mass_left_(mass_left),
@@ -27,12 +28,13 @@ InnerForBwGW<ConformalGeometry>::InnerForBwGW(
       xcoord_left_(xcoord_left),
       xcoord_right_(xcoord_right),
       attenuation_parameter_(attenuation_parameter),
+      attenuation_radius_(attenuation_radius),
       outer_radius_(outer_radius),
       boundary_(boundary) {
   solution_ =
       std::make_unique<Xcts::AnalyticData::BinaryWithGravitationalWaves>(
           mass_left, mass_right, xcoord_left, xcoord_right,
-          attenuation_parameter, outer_radius, false);
+          attenuation_parameter, attenuation_radius, outer_radius, false);
 }
 
 namespace {

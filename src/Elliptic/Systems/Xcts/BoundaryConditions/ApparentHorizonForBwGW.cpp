@@ -34,14 +34,15 @@ namespace Xcts::BoundaryConditions {
 template <Xcts::Geometry ConformalGeometry>
 ApparentHorizonForBwGW<ConformalGeometry>::ApparentHorizonForBwGW(
     double mass_left, double mass_right, double xcoord_left,
-    double xcoord_right, double attenuation_parameter, double outer_radius,
-    bool solution_for_lapse, bool solution_for_negative_expansion,
-    const Options::Context& /*context*/)
+    double xcoord_right, double attenuation_parameter,
+    double attenuation_radius, double outer_radius, bool solution_for_lapse,
+    bool solution_for_negative_expansion, const Options::Context& /*context*/)
     : mass_left_(mass_left),
       mass_right_(mass_right),
       xcoord_left_(xcoord_left),
       xcoord_right_(xcoord_right),
       attenuation_parameter_(attenuation_parameter),
+      attenuation_radius_(attenuation_radius),
       outer_radius_(outer_radius),
       solution_for_lapse_(solution_for_lapse),
       solution_for_negative_expansion_(solution_for_negative_expansion) {
@@ -49,7 +50,8 @@ ApparentHorizonForBwGW<ConformalGeometry>::ApparentHorizonForBwGW(
     lapse_solution_ =
         std::make_unique<Xcts::AnalyticData::BinaryWithGravitationalWaves>(
             mass_left, mass_right, xcoord_left, xcoord_right,
-            attenuation_parameter, outer_radius, write_evolution_option_);
+            attenuation_parameter, attenuation_radius, outer_radius,
+            write_evolution_option_);
   } else {
     lapse_solution_ = std::nullopt;
   }
@@ -57,7 +59,8 @@ ApparentHorizonForBwGW<ConformalGeometry>::ApparentHorizonForBwGW(
     negative_expansion_solution_ =
         std::make_unique<Xcts::AnalyticData::BinaryWithGravitationalWaves>(
             mass_left, mass_right, xcoord_left, xcoord_right,
-            attenuation_parameter, outer_radius, write_evolution_option_);
+            attenuation_parameter, attenuation_radius, outer_radius,
+            write_evolution_option_);
   } else {
     negative_expansion_solution_ = std::nullopt;
   }

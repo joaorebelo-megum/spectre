@@ -1112,6 +1112,8 @@ template <typename DataType>
 tnsr::ii<DataType, 3>
 BinaryWithGravitationalWavesVariables<DataType>::get_past_radiative_term(
     DataType t) const {
+  const auto distance_left_past = get_past_distance_left(t);
+  const auto distance_right_past = get_past_distance_right(t);
   const auto near_zone_term_past = get_past_near_zone_term(t);
   const auto present_term_past = get_past_present_term(t);
   const auto past_term_past = get_past_past_term(t);
@@ -1120,8 +1122,12 @@ BinaryWithGravitationalWavesVariables<DataType>::get_past_radiative_term(
   for (size_t i = 0; i < 3; ++i) {
     for (size_t j = 0; j <= i; ++j) {
       radiative_term_past.get(i, j) =
-          near_zone_term_past.get(i, j) + present_term_past.get(i, j) +
-          past_term_past.get(i, j) + integral_term_past.get(i, j);
+          (1. / (1. + exp(-2. * attenuation_parameter *
+                          (get(distance_left_past) - attenuation_radius)))) *
+          (1. / (1. + exp(-2. * attenuation_parameter *
+                          (get(distance_right_past) - attenuation_radius)))) *
+          (near_zone_term_past.get(i, j) + present_term_past.get(i, j) +
+           past_term_past.get(i, j) + integral_term_past.get(i, j));
     }
   }
   return radiative_term_past;
