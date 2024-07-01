@@ -131,6 +131,12 @@ class ApparentHorizonForBwGW
         "The parameter controlling the width of the attenuation function.";
     using type = double;
   };
+  struct AttenuationRadius {
+    static constexpr Options::String help =
+        "The parameter controlling the transition center of the attenuation "
+        "function.";
+    using type = double;
+  };
   struct OuterRadius {
     static constexpr Options::String help =
         "The radius of the outer boundary of the computational domain.";
@@ -158,9 +164,9 @@ class ApparentHorizonForBwGW
         "horizon.";
   };
 
-  using options =
-      tmpl::list<MassLeft, MassRight, XCoordsLeft, XCoordsRight,
-                 AttenuationParameter, OuterRadius, Lapse, NegativeExpansion>;
+  using options = tmpl::list<MassLeft, MassRight, XCoordsLeft, XCoordsRight,
+                             AttenuationParameter, AttenuationRadius,
+                             OuterRadius, Lapse, NegativeExpansion>;
 
   ApparentHorizonForBwGW() = default;
   ApparentHorizonForBwGW(const ApparentHorizonForBwGW&) = delete;
@@ -179,13 +185,14 @@ class ApparentHorizonForBwGW
       const override {
     return std::make_unique<ApparentHorizonForBwGW>(
         mass_left_, mass_right_, xcoord_left_, xcoord_right_,
-        attenuation_parameter_, outer_radius_, solution_for_lapse_,
-        solution_for_negative_expansion_);
+        attenuation_parameter_, attenuation_radius_, outer_radius_,
+        solution_for_lapse_, solution_for_negative_expansion_);
   }
 
   ApparentHorizonForBwGW(double mass_left, double mass_right,
                          double xcoord_left, double xcoord_right,
-                         double attenuation_parameter, double outer_radius,
+                         double attenuation_parameter,
+                         double attenuation_radius, double outer_radius,
                          bool solution_for_lapse,
                          bool solution_for_negative_expansion,
                          const Options::Context& context = {});
@@ -347,6 +354,7 @@ class ApparentHorizonForBwGW
   double xcoord_left_ = std::numeric_limits<double>::signaling_NaN();
   double xcoord_right_ = std::numeric_limits<double>::signaling_NaN();
   double attenuation_parameter_ = std::numeric_limits<double>::signaling_NaN();
+  double attenuation_radius_ = std::numeric_limits<double>::signaling_NaN();
   double outer_radius_ = std::numeric_limits<double>::signaling_NaN();
   bool write_evolution_option_ = false;
   bool solution_for_lapse_ = false;

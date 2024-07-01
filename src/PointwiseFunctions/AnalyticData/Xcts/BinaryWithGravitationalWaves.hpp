@@ -173,8 +173,8 @@ struct BinaryWithGravitationalWavesVariables
           DataType, Dim, Frame::ElementLogical, Frame::Inertial>>>
           local_inv_jacobian,
       const tnsr::I<DataType, 3>& local_x, const double local_mass_left,
-      const double local_mass_right,
-      const double local_attenuation_parameter,
+      const double local_mass_right, const double local_attenuation_parameter,
+      const double local_attenuation_radius,
       const std::array<std::vector<double>, 3>& local_past_position_left,
       const std::array<std::vector<double>, 3>& local_past_position_right,
       const std::array<std::vector<double>, 3>& local_past_dt_position_left,
@@ -191,6 +191,7 @@ struct BinaryWithGravitationalWavesVariables
         mass_left(local_mass_left),
         mass_right(local_mass_right),
         attenuation_parameter(local_attenuation_parameter),
+        attenuation_radius(local_attenuation_radius),
         past_position_left(local_past_position_left),
         past_position_right(local_past_position_right),
         past_dt_position_left(local_past_dt_position_left),
@@ -212,6 +213,7 @@ struct BinaryWithGravitationalWavesVariables
   const double mass_left;
   const double mass_right;
   const double attenuation_parameter;
+  const double attenuation_radius;
   const std::array<double, 3> normal_lr{{-1., 0., 0.}};
 
   const std::array<std::vector<double>, 3> past_position_left{};
@@ -570,7 +572,14 @@ class BinaryWithGravitationalWaves
   };
   struct AttenuationParameter {
     static constexpr Options::String help =
-        "The parameter controlling the width of the attenuation function.";
+        "The parameter controlling the transition width of the attenuation "
+        "function.";
+    using type = double;
+  };
+  struct AttenuationRadius {
+    static constexpr Options::String help =
+        "The parameter controlling the transition center of the attenuation "
+        "function.";
     using type = double;
   };
   struct OuterRadius {
@@ -583,9 +592,9 @@ class BinaryWithGravitationalWaves
         "Option to write the evolution of the past history to a file.";
     using type = bool;
   };
-  using options =
-      tmpl::list<MassLeft, MassRight, XCoordsLeft, XCoordsRight,
-                 AttenuationParameter, OuterRadius, WriteEvolutionOption>;
+  using options = tmpl::list<MassLeft, MassRight, XCoordsLeft, XCoordsRight,
+                             AttenuationParameter, AttenuationRadius,
+                             OuterRadius, WriteEvolutionOption>;
   static constexpr Options::String help =
       "Binary black hole initial data with realistic wave background, "
       "constructed in Post-Newtonian approximations. ";
@@ -602,16 +611,18 @@ class BinaryWithGravitationalWaves
   BinaryWithGravitationalWaves(double mass_left, double mass_right,
                                double xcoord_left, double xcoord_right,
                                double attenuation_parameter,
-                               double outer_radius, bool write_evolution_option,
+                               double attenuation_radius, double outer_radius,
+                               bool write_evolution_option,
                                const Options::Context& context = {})
       : mass_left_(mass_left),
         mass_right_(mass_right),
         xcoord_left_(xcoord_left),
         xcoord_right_(xcoord_right),
         attenuation_parameter_(attenuation_parameter),
+        attenuation_radius_(attenuation_radius),
         outer_radius_(outer_radius),
         write_evolution_option_(write_evolution_option) {
-    if (mass_left_ < 0. or mass_right_ < 0.) {
+    if (mass_left_ <= 0. or mass_right_ <= 0.) {
       PARSE_ERROR(context, "'MassLeft' and 'MassRight' need to be positive.");
     }
     if (xcoord_left_ >= xcoord_right_) {
@@ -620,6 +631,9 @@ class BinaryWithGravitationalWaves
     }
     if (attenuation_parameter_ < 0.) {
       PARSE_ERROR(context, "'AttenuationParameter' must be positive.");
+    }
+    if (attenuation_radius_ <= 0.) {
+      PARSE_ERROR(context, "'AttenuationRadius' must be positive.");
     }
     if (outer_radius_ <= 0.) {
       PARSE_ERROR(context, "'OuterRadius' must be positive.");
@@ -669,6 +683,7 @@ class BinaryWithGravitationalWaves
     p | xcoord_left_;
     p | xcoord_right_;
     p | attenuation_parameter_;
+    p | attenuation_radius_;
     p | write_evolution_option_;
     p | outer_radius_;
     for (auto& vec : past_position_left_) {
@@ -703,6 +718,7 @@ class BinaryWithGravitationalWaves
   double xcoord_left() const { return xcoord_left_; }
   double xcoord_right() const { return xcoord_right_; }
   double attenuation_parameter() const { return attenuation_parameter_; }
+  double attenuation_radius() const { return attenuation_radius_; }
   double outer_radius() const { return outer_radius_; }
   bool write_evolution_option() const { return write_evolution_option_; }
 
@@ -714,6 +730,7 @@ class BinaryWithGravitationalWaves
   double ymomentum_left_ = std::numeric_limits<double>::signaling_NaN();
   double ymomentum_right_ = std::numeric_limits<double>::signaling_NaN();
   double attenuation_parameter_ = std::numeric_limits<double>::signaling_NaN();
+  double attenuation_radius_ = std::numeric_limits<double>::signaling_NaN();
   double outer_radius_ = std::numeric_limits<double>::signaling_NaN();
   bool write_evolution_option_ = true;
 
@@ -734,6 +751,7 @@ class BinaryWithGravitationalWaves
                                 mass_left_,
                                 mass_right_,
                                 attenuation_parameter_,
+                                attenuation_radius_,
                                 past_position_left_,
                                 past_position_right_,
                                 past_dt_position_left_,
