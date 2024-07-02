@@ -1119,8 +1119,9 @@ BinaryWithGravitationalWavesVariables<DataType>::get_past_radiative_term(
   const auto past_term_past = get_past_past_term(t);
   const auto integral_term_past = get_past_integral_term(t);
   double turn_off = 1.;
-  if (attenuation_parameter == 0)
+  if (attenuation_parameter == 0) {
     turn_off = 2.;
+  }
   tnsr::ii<DataType, 3> radiative_term_past{t.size()};
   for (size_t i = 0; i < 3; ++i) {
     for (size_t j = 0; j <= i; ++j) {
@@ -2033,8 +2034,7 @@ void BinaryWithGravitationalWaves::hamiltonian_system(
              sqrt((x[1] * x[5] - x[2] * x[4]) * (x[1] * x[5] - x[2] * x[4]) +
                   (x[2] * x[3] - x[0] * x[5]) * (x[2] * x[3] - x[0] * x[5]) +
                   (x[0] * x[4] - x[1] * x[3]) * (x[0] * x[4] - x[1] * x[3]));
-  double w =
-      reduced_mass / (total_mass * mass_left()) * sqrt(pdotp) / sqrt(qdotq);
+  double w = L / (square(total_mass) * qdotq);
   double vw = std::cbrt(total_mass * w);
   double gamma_Euler = 0.57721566490153286060651209008240243104215933593992;
 
