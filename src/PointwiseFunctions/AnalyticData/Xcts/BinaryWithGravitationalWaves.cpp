@@ -330,6 +330,7 @@ void BinaryWithGravitationalWavesVariables<DataType>::operator()(
   Scalar<DataType> trace_extrinsic_curvature_back =
       get_past_trace_extrinsic_curvature(time_back);
   get(*dt_trace_extrinsic_curvature) =
+      4. *
       (get(trace_extrinsic_curvature) - get(trace_extrinsic_curvature_back)) /
       time_displacement;
 }
@@ -426,6 +427,7 @@ void BinaryWithGravitationalWavesVariables<DataType>::operator()(
   for (size_t i = 0; i < 3; ++i) {
     for (size_t j = 0; j <= i; ++j) {
       longitudinal_shift_background_minus_dt_conformal_metric->get(i, j) +=
+          2. *
           (inv_conformal_metric.get(i, j) -
            inv_conformal_metric_back.get(i, j)) /
           time_displacement;
@@ -1118,20 +1120,20 @@ BinaryWithGravitationalWavesVariables<DataType>::get_past_radiative_term(
   const auto present_term_past = get_past_present_term(t);
   const auto past_term_past = get_past_past_term(t);
   const auto integral_term_past = get_past_integral_term(t);
-  double turn_off = 1.;
+  double turn_off = .5;
   if (attenuation_parameter == 0) {
-    turn_off = 2.;
+    turn_off = 1.;
   }
   tnsr::ii<DataType, 3> radiative_term_past{t.size()};
   for (size_t i = 0; i < 3; ++i) {
     for (size_t j = 0; j <= i; ++j) {
       radiative_term_past.get(i, j) =
-          (turn_off /
-           (1. + exp(-2. * attenuation_parameter *
-                     (get(distance_left_past) - attenuation_radius)))) *
-          (turn_off /
-           (1. + exp(-2. * attenuation_parameter *
-                     (get(distance_right_past) - attenuation_radius)))) *
+          (turn_off +
+           .5 * tanh(attenuation_parameter *
+                     (get(distance_left_past) - attenuation_radius))) *
+          (turn_off +
+           .5 * tanh(attenuation_parameter *
+                     (get(distance_right_past) - attenuation_radius))) *
           (near_zone_term_past.get(i, j) + present_term_past.get(i, j) +
            past_term_past.get(i, j) + integral_term_past.get(i, j));
     }
