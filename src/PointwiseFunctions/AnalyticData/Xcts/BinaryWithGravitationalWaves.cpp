@@ -327,10 +327,28 @@ void BinaryWithGravitationalWavesVariables<DataType>::operator()(
       cache->get_var(*this, gr::Tags::TraceExtrinsicCurvature<DataType>{});
   double time_displacement = 0.1;
   DataType time_back(get(trace_extrinsic_curvature).size(), -time_displacement);
+  DataType present_time(get_size(get<0>(x)), max_time_interpolator);
+  const auto distance_left = get_past_distance_left(present_time);
+  const auto distance_right = get_past_distance_right(present_time);
+  const auto normal_left = get_past_normal_left(present_time);
+  const auto normal_right = get_past_normal_right(present_time);
+  const auto momentum_left = get_past_momentum_left(present_time);
+  const auto momentum_right = get_past_momentum_right(present_time);
   Scalar<DataType> trace_extrinsic_curvature_back =
       get_past_trace_extrinsic_curvature(time_back);
   get(*dt_trace_extrinsic_curvature) =
-      4. *
+      square(
+          1. +
+          .75 * sqrt(3) * square(mass_left) * normal_left.get(1) *
+              momentum_left.get(1) /
+              ((1. - 2. * mass_left / get(distance_left)) *
+               sqrt(square(get(distance_left)) * square(get(distance_left)) -
+                    2. * mass_left * cube(get(distance_left)) + 1.6875)) +
+          .75 * sqrt(3) * square(mass_right) * normal_right.get(1) *
+              momentum_right.get(1) /
+              ((1. - 2. * mass_right / get(distance_right)) *
+               sqrt(square(get(distance_right)) * square(get(distance_right)) -
+                    2. * mass_right * cube(get(distance_right)) + 1.6875))) *
       (get(trace_extrinsic_curvature) - get(trace_extrinsic_curvature_back)) /
       time_displacement;
 }
@@ -419,6 +437,13 @@ void BinaryWithGravitationalWavesVariables<DataType>::operator()(
       deriv_shift_background, inv_conformal_metric,
       conformal_christoffel_second_kind);
   // DtConformalMetric (finite difference 1st order)
+  DataType present_time(get_size(get<0>(x)), max_time_interpolator);
+  const auto distance_left = get_past_distance_left(present_time);
+  const auto distance_right = get_past_distance_right(present_time);
+  const auto normal_left = get_past_normal_left(present_time);
+  const auto normal_right = get_past_normal_right(present_time);
+  const auto momentum_left = get_past_momentum_left(present_time);
+  const auto momentum_right = get_past_momentum_right(present_time);
   double time_displacement = 0.1;
   DataType time_back(get_size(x.get(0)), -time_displacement);
   const auto conformal_metric_back = get_past_conformal_metric(time_back);
@@ -427,7 +452,17 @@ void BinaryWithGravitationalWavesVariables<DataType>::operator()(
   for (size_t i = 0; i < 3; ++i) {
     for (size_t j = 0; j <= i; ++j) {
       longitudinal_shift_background_minus_dt_conformal_metric->get(i, j) +=
-          2. *
+          (1. +
+           .75 * sqrt(3) * square(mass_left) * normal_left.get(1) *
+               momentum_left.get(1) /
+               ((1. - 2. * mass_left / get(distance_left)) *
+                sqrt(square(get(distance_left)) * square(get(distance_left)) -
+                     2. * mass_left * cube(get(distance_left)) + 1.6875)) +
+           .75 * sqrt(3) * square(mass_right) * normal_right.get(1) *
+               momentum_right.get(1) /
+               ((1. - 2. * mass_right / get(distance_right)) *
+                sqrt(square(get(distance_right)) * square(get(distance_right)) -
+                     2. * mass_right * cube(get(distance_right)) + 1.6875))) *
           (inv_conformal_metric.get(i, j) -
            inv_conformal_metric_back.get(i, j)) /
           time_displacement;
