@@ -330,6 +330,9 @@ void BinaryWithGravitationalWavesVariables<DataType>::operator()(
   DataType present_time(get_size(get<0>(x)), max_time_interpolator);
   const auto distance_left = get_past_distance_left(present_time);
   const auto distance_right = get_past_distance_right(present_time);
+  const auto areal_distance_left = find_areal_distance_left(get(distance_left));
+  const auto areal_distance_right =
+      find_areal_distance_right(get(distance_right));
   const auto normal_left = get_past_normal_left(present_time);
   const auto normal_right = get_past_normal_right(present_time);
   const auto momentum_left = get_past_momentum_left(present_time);
@@ -340,15 +343,16 @@ void BinaryWithGravitationalWavesVariables<DataType>::operator()(
       square(
           1. +
           .75 * sqrt(3) * square(mass_left) * normal_left.get(1) *
-              momentum_left.get(1) /
-              ((1. - 2. * mass_left / get(distance_left)) *
-               sqrt(square(get(distance_left)) * square(get(distance_left)) -
-                    2. * mass_left * cube(get(distance_left)) + 1.6875)) +
+              (momentum_left.get(1) / mass_left) /
+              ((1. - 2. * mass_left / areal_distance_left) *
+               sqrt(square(areal_distance_left) * square(areal_distance_left) -
+                    2. * mass_left * cube(areal_distance_left) + 1.6875)) +
           .75 * sqrt(3) * square(mass_right) * normal_right.get(1) *
-              momentum_right.get(1) /
-              ((1. - 2. * mass_right / get(distance_right)) *
-               sqrt(square(get(distance_right)) * square(get(distance_right)) -
-                    2. * mass_right * cube(get(distance_right)) + 1.6875))) *
+              (momentum_right.get(1) / mass_right) /
+              ((1. - 2. * mass_right / areal_distance_right) *
+               sqrt(square(areal_distance_right) *
+                        square(areal_distance_right) -
+                    2. * mass_right * cube(areal_distance_right) + 1.6875))) *
       (get(trace_extrinsic_curvature) - get(trace_extrinsic_curvature_back)) /
       time_displacement;
 }
@@ -409,6 +413,16 @@ void BinaryWithGravitationalWavesVariables<DataType>::operator()(
     shift_background->get(i) +=
         shift_r_left * normal_left.get(i) + shift_r_right * normal_right.get(i);
   }
+
+  // Co-rotaing shift
+  const double total_mass = mass_left + mass_right;
+  const double reduced_mass = mass_left * mass_right / total_mass;
+  const auto separation = get_past_separation(present_time);
+  const auto angular_velocity = sqrt(total_mass / cube(get(separation))) *
+                                (1. + .5 * (reduced_mass / total_mass - 3.) *
+                                          total_mass / get(separation));
+  get<0>(*shift_background) += -angular_velocity * get<1>(x);
+  get<1>(*shift_background) += angular_velocity * get<0>(x);
 }
 
 template <typename DataType>
@@ -440,6 +454,9 @@ void BinaryWithGravitationalWavesVariables<DataType>::operator()(
   DataType present_time(get_size(get<0>(x)), max_time_interpolator);
   const auto distance_left = get_past_distance_left(present_time);
   const auto distance_right = get_past_distance_right(present_time);
+  const auto areal_distance_left = find_areal_distance_left(get(distance_left));
+  const auto areal_distance_right =
+      find_areal_distance_right(get(distance_right));
   const auto normal_left = get_past_normal_left(present_time);
   const auto normal_right = get_past_normal_right(present_time);
   const auto momentum_left = get_past_momentum_left(present_time);
@@ -454,15 +471,16 @@ void BinaryWithGravitationalWavesVariables<DataType>::operator()(
       longitudinal_shift_background_minus_dt_conformal_metric->get(i, j) +=
           (1. +
            .75 * sqrt(3) * square(mass_left) * normal_left.get(1) *
-               momentum_left.get(1) /
-               ((1. - 2. * mass_left / get(distance_left)) *
-                sqrt(square(get(distance_left)) * square(get(distance_left)) -
-                     2. * mass_left * cube(get(distance_left)) + 1.6875)) +
+               (momentum_left.get(1) / mass_left) /
+               ((1. - 2. * mass_left / areal_distance_left) *
+                sqrt(square(areal_distance_left) * square(areal_distance_left) -
+                     2. * mass_left * cube(areal_distance_left) + 1.6875)) +
            .75 * sqrt(3) * square(mass_right) * normal_right.get(1) *
-               momentum_right.get(1) /
-               ((1. - 2. * mass_right / get(distance_right)) *
-                sqrt(square(get(distance_right)) * square(get(distance_right)) -
-                     2. * mass_right * cube(get(distance_right)) + 1.6875))) *
+               (momentum_right.get(1) / mass_right) /
+               ((1. - 2. * mass_right / areal_distance_right) *
+                sqrt(square(areal_distance_right) *
+                         square(areal_distance_right) -
+                     2. * mass_right * cube(areal_distance_right) + 1.6875))) *
           (inv_conformal_metric.get(i, j) -
            inv_conformal_metric_back.get(i, j)) /
           time_displacement;
