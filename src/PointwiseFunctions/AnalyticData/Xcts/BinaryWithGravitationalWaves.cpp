@@ -393,7 +393,7 @@ void BinaryWithGravitationalWavesVariables<DataType>::operator()(
   }
   */
   // Horizon Penetrating Lapse
-
+  /*
   DataType present_time(get_size(get<0>(x)), max_time_interpolator);
   const auto distance_left_past = get_past_distance_left(present_time);
   const auto distance_right_past = get_past_distance_right(present_time);
@@ -413,8 +413,9 @@ void BinaryWithGravitationalWavesVariables<DataType>::operator()(
     shift_background->get(i) +=
         shift_r_left * normal_left.get(i) + shift_r_right * normal_right.get(i);
   }
-
+  */
   // Co-rotaing shift
+  /*
   const double total_mass = mass_left + mass_right;
   const double reduced_mass = mass_left * mass_right / total_mass;
   const auto separation = get_past_separation(present_time);
@@ -423,6 +424,7 @@ void BinaryWithGravitationalWavesVariables<DataType>::operator()(
                                           total_mass / get(separation));
   get<0>(*shift_background) += -angular_velocity * get<1>(x);
   get<1>(*shift_background) += angular_velocity * get<0>(x);
+  */
 }
 
 template <typename DataType>
@@ -541,9 +543,10 @@ void BinaryWithGravitationalWavesVariables<DataType>::operator()(
     const gsl::not_null<Scalar<DataType>*> conformal_factor_minus_one,
     const gsl::not_null<Cache*> /*cache*/,
     Xcts::Tags::ConformalFactorMinusOne<DataType> /*meta*/) const {
-  DataType present_time(get_size(get<0>(x)), max_time_interpolator);
-  const auto conformal_factor_past = get_past_conformal_factor(present_time);
-  get(*conformal_factor_minus_one) = get(conformal_factor_past) - 1.0;
+  // DataType present_time(get_size(get<0>(x)), max_time_interpolator);
+  // const auto conformal_factor_past = get_past_conformal_factor(present_time);
+  // get(*conformal_factor_minus_one) = get(conformal_factor_past) - 1.0;
+  get(*conformal_factor_minus_one) = 0.;
 }
 
 template <typename DataType>
@@ -554,9 +557,10 @@ void BinaryWithGravitationalWavesVariables<DataType>::operator()(
     Xcts::Tags::LapseTimesConformalFactorMinusOne<DataType> /*meta*/) const {
   DataType present_time(get_size(get<0>(x)), max_time_interpolator);
   const auto lapse = get_past_lapse(present_time);
-  const auto conformal_factor = get_past_conformal_factor(present_time);
+  // const auto conformal_factor = get_past_conformal_factor(present_time);
   get(*lapse_times_conformal_factor_minus_one) =
-      get(lapse) * get(conformal_factor) - 1.;
+      // get(lapse) * get(conformal_factor) - 1.;
+      get(lapse) - 1.;
 }
 
 template <typename DataType>
@@ -1153,12 +1157,15 @@ BinaryWithGravitationalWavesVariables<DataType>::get_past_conformal_metric(
   tnsr::ii<DataType, 3> conformal_metric_past{t.size()};
   for (size_t i = 0; i < 3; ++i) {
     for (size_t j = 0; j <= i; ++j) {
-      conformal_metric_past.get(i, j) =
-          radiative_term.get(i, j) /
-          (get(conformal_factor_past) * get(conformal_factor_past) *
-           get(conformal_factor_past) * get(conformal_factor_past));
+      conformal_metric_past.get(i, j) = radiative_term.get(i, j);
+      // /
+      //(get(conformal_factor_past) * get(conformal_factor_past) *
+      // get(conformal_factor_past) * get(conformal_factor_past));
     }
-    conformal_metric_past.get(i, i) += 1.;
+    // conformal_metric_past.get(i, i) += 1.;
+    conformal_metric_past.get(i, i) =
+        (get(conformal_factor_past) * get(conformal_factor_past) *
+         get(conformal_factor_past) * get(conformal_factor_past));
   }
   return conformal_metric_past;
 }
@@ -1519,6 +1526,143 @@ BinaryWithGravitationalWavesVariables<DataType>::get_past_integral_term(
     }
   }
   return integral_term_past;
+}
+
+template <typename DataType>
+Scalar<DataType>
+BinaryWithGravitationalWavesVariables<DataType>::get_past_conformal_factor(
+    DataType t) const {
+  const auto distance_left_past = get_past_distance_left(t);
+  const auto distance_right_past = get_past_distance_right(t);
+  Scalar<DataType> conformal_factor_past{t.size()};
+
+  // PN conformal factor
+  /*
+  const auto separation_past = get_past_separation(t);
+  const auto momentum_left_past = get_past_momentum_left(t);
+  const auto momentum_right_past = get_past_momentum_right(t);
+  const DataType E_left_past =
+      mass_left +
+      get(dot_product(momentum_left_past, momentum_left_past)) /
+          (2. * mass_left) -
+      mass_left * mass_right / (2. * get(separation_past));
+  const DataType E_right_past =
+      mass_right +
+      get(dot_product(momentum_right_past, momentum_right_past)) /
+          (2. * mass_right) -
+      mass_left * mass_right / (2. * get(separation_past));
+  const auto pn_conformal_factor_past =
+      1. + E_left_past / (2. * get(distance_left_past)) +
+      E_right_past / (2. * get(distance_right_past));
+  get(conformal_factor_past) = pn_conformal_factor_past;
+  */
+  // Horizon Penetrating conformal factor
+
+  const auto areal_distance_left =
+      find_areal_distance_left(get(distance_left_past));
+  const auto areal_distance_right =
+      find_areal_distance_right(get(distance_right_past));
+  DataType conformal_factor_left{areal_distance_right.size()};
+  DataType conformal_factor_right{areal_distance_right.size()};
+  for (size_t i = 0; i < conformal_factor_left.size(); ++i) {
+    conformal_factor_left[i] =
+        sqrt(4. * areal_distance_left[i] /
+             (2. * areal_distance_left[i] + mass_left +
+              sqrt(4. * square(areal_distance_left[i]) +
+                   4. * areal_distance_left[i] * mass_left +
+                   3. * square(mass_left)))) *
+        std::pow((8. * areal_distance_left[i] + 6. * mass_left +
+                  3. * sqrt(8. * square(areal_distance_left[i]) +
+                            8. * areal_distance_left[i] * mass_left +
+                            6. * square(mass_left))) /
+                     ((4. + 3. * sqrt(2.)) *
+                      (2. * areal_distance_left[i] - 3. * mass_left)),
+                 1. / (2. * sqrt(2.)));
+    conformal_factor_right[i] =
+        sqrt(4. * areal_distance_right[i] /
+             (2. * areal_distance_right[i] + mass_right +
+              sqrt(4. * square(areal_distance_right[i]) +
+                   4. * areal_distance_right[i] * mass_right +
+                   3. * square(mass_right)))) *
+        std::pow((8. * areal_distance_right[i] + 6. * mass_right +
+                  3. * sqrt(8. * square(areal_distance_right[i]) +
+                            8. * areal_distance_right[i] * mass_right +
+                            6. * square(mass_right))) /
+                     ((4. + 3. * sqrt(2.)) *
+                      (2. * areal_distance_right[i] - 3. * mass_right)),
+                 1. / (2. * sqrt(2.)));
+  }
+  get(conformal_factor_past) =
+      -1. + conformal_factor_left + conformal_factor_right;
+  ;
+
+  return conformal_factor_past;
+}
+
+template <typename DataType>
+Scalar<DataType>
+BinaryWithGravitationalWavesVariables<DataType>::get_past_lapse(
+    DataType t) const {
+  Scalar<DataType> lapse_past{t.size()};
+  // PN Lapse
+  /*
+  const auto conformal_factor_past = get_past_conformal_factor(t);
+  get(lapse_past) = (2. - get(conformal_factor_past)) /
+  get(conformal_factor_past);
+  */
+  // Horizon Penetrating Lapse
+
+  const auto distance_left_past = get_past_distance_left(t);
+  const auto distance_right_past = get_past_distance_right(t);
+  const auto areal_distance_left =
+      find_areal_distance_left(get(distance_left_past));
+  const auto areal_distance_right =
+      find_areal_distance_right(get(distance_right_past));
+  DataType lapse_left{areal_distance_right.size()};
+  DataType lapse_right{areal_distance_right.size()};
+  for (size_t i = 0; i < lapse_left.size(); ++i) {
+    lapse_left[i] = sqrt(1. - 2. * mass_left / areal_distance_left[i] +
+                         27. * square(square(mass_left)) /
+                             (16. * square(square(areal_distance_left[i]))));
+    lapse_right[i] = sqrt(1. - 2. * mass_right / areal_distance_right[i] +
+                          27. * square(square(mass_right)) /
+                              (16. * square(square(areal_distance_right[i]))));
+  }
+  get(lapse_past) = -1. + lapse_left + lapse_right;
+
+  return lapse_past;
+}
+
+template <typename DataType>
+tnsr::I<DataType, 3>
+BinaryWithGravitationalWavesVariables<DataType>::get_past_shift(
+    DataType t) const {
+  tnsr::I<DataType, 3> shift_past{t.size()};
+  std::fill(shift_past.begin(), shift_past.end(), 0.);
+
+  // Horizon Penetrating shift
+
+  DataType present_time(get_size(get<0>(x)), max_time_interpolator);
+  const auto distance_left_past = get_past_distance_left(present_time);
+  const auto distance_right_past = get_past_distance_right(present_time);
+  const auto areal_distance_left =
+      find_areal_distance_left(get(distance_left_past));
+  const auto areal_distance_right =
+      find_areal_distance_right(get(distance_right_past));
+  const auto normal_left = get_past_normal_left(present_time);
+  const auto normal_right = get_past_normal_right(present_time);
+  const DataType shift_r_left = .75 * sqrt(3) * square(mass_left) *
+                                get(distance_left_past) /
+                                pow(areal_distance_left, 3);
+  const DataType shift_r_right = .75 * sqrt(3) * square(mass_right) *
+                                 get(distance_right_past) /
+                                 pow(areal_distance_right, 3);
+  for (size_t i = 0; i < 3; ++i) {
+    shift_past.get(i) +=
+        shift_r_left * normal_left.get(i) + shift_r_right * normal_right.get(i);
+  }
+
+  return shift_past;
 }
 
 template class BinaryWithGravitationalWavesVariables<DataVector>;
