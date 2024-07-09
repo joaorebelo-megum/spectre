@@ -160,6 +160,7 @@ enum class SchwarzschildCoordinates {
    * \end{equation}
    */
   KerrSchildIsotropic,
+  MaximalIsotropic,
 };
 
 std::ostream& operator<<(std::ostream& os, SchwarzschildCoordinates coords);

@@ -1594,7 +1594,6 @@ BinaryWithGravitationalWavesVariables<DataType>::get_past_conformal_factor(
   }
   get(conformal_factor_past) =
       -1. + conformal_factor_left + conformal_factor_right;
-  ;
 
   return conformal_factor_past;
 }

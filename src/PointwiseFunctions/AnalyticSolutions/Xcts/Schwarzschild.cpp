@@ -42,6 +42,8 @@ std::ostream& operator<<(std::ostream& os,
       return os << "PainleveGullstrand";
     case SchwarzschildCoordinates::KerrSchildIsotropic:
       return os << "KerrSchildIsotropic";
+    case SchwarzschildCoordinates::MaximalIsotropic:
+      return os << "MaximalIsotropic";
       // LCOV_EXCL_START
     default:
       ERROR("Unknown SchwarzschildCoordinates");
@@ -62,13 +64,15 @@ Options::create_from_yaml<Xcts::Solutions::SchwarzschildCoordinates>::create<
     return Xcts::Solutions::SchwarzschildCoordinates::PainleveGullstrand;
   } else if ("KerrSchildIsotropic" == type_read) {
     return Xcts::Solutions::SchwarzschildCoordinates::KerrSchildIsotropic;
+  } else if ("MaximalIsotropic" == type_read) {
+    return Xcts::Solutions::SchwarzschildCoordinates::MaximalIsotropic;
   }
   PARSE_ERROR(options.context(),
               "Failed to convert \""
                   << type_read
                   << "\" to Xcts::Solutions::SchwarzschildCoordinates. Must be "
                      "one of 'Isotropic', 'PainleveGullstrand', "
-                     "'KerrSchildIsotropic'.");
+                     "'KerrSchildIsotropic', 'MaximalIsotropic'.");
 }
 
 namespace Xcts::Solutions {
@@ -118,6 +122,61 @@ DataVector kerr_schild_areal_radius_from_isotropic(
       },
       isotropic_radius, isotropic_radius + mass, 1.0e-12, 1.0e-15);
 }
+
+double maximal_isotropic_radius_from_areal(const double areal_radius,
+                                           const double mass) {
+  return .25 *
+         (2. * areal_radius + mass +
+          sqrt(4. * square(areal_radius) + 4. * areal_radius * mass +
+               3. * square(mass))) *
+         std::pow((4. + 3. * sqrt(2.)) * (2. * areal_radius - 3. * mass) /
+                      (8. * areal_radius + 6. * mass +
+                       3. * sqrt(8. * square(areal_radius) +
+                                 8. * areal_radius * mass + 6. * square(mass))),
+                  1. / sqrt(2.));
+}
+
+double kerr_schild_areal_radius_from_maximal_isotropic(
+    const double isotropic_radius, const double mass) {
+  return RootFinder::toms748(
+      [&isotropic_radius, &mass](const double areal_radius) {
+        return .25 *
+                   (2. * areal_radius + mass +
+                    sqrt(4. * square(areal_radius) + 4. * areal_radius * mass +
+                         3. * square(mass))) *
+                   std::pow((4. + 3. * sqrt(2.)) *
+                                (2. * areal_radius - 3. * mass) /
+                                (8. * areal_radius + 6. * mass +
+                                 3. * sqrt(8. * square(areal_radius) +
+                                           8. * areal_radius * mass +
+                                           6. * square(mass))),
+                            1. / sqrt(2.)) -
+               isotropic_radius;
+      },
+      1.5 * mass, 1e9, 1.0e-12, 1.0e-15);
+}
+
+DataVector kerr_schild_areal_radius_from_maximal_isotropic(
+    const DataVector& isotropic_radius, const double mass) {
+  DataVector lower(isotropic_radius.size(), 1.5 * mass);
+  DataVector upper(isotropic_radius.size(), 1e9);
+  return RootFinder::toms748<true>(
+      [&isotropic_radius, &mass](const auto areal_radius, const size_t i) {
+        return .25 *
+                   (2. * areal_radius + mass +
+                    sqrt(4. * square(areal_radius) + 4. * areal_radius * mass +
+                         3. * square(mass))) *
+                   std::pow((4. + 3. * sqrt(2.)) *
+                                (2. * areal_radius - 3. * mass) /
+                                (8. * areal_radius + 6. * mass +
+                                 3. * sqrt(8. * square(areal_radius) +
+                                           8. * areal_radius * mass +
+                                           6. * square(mass))),
+                            1. / sqrt(2.)) -
+               isotropic_radius[i];
+      },
+      lower, upper, 1.0e-12, 1.0e-15);
+}
 }  // namespace
 
 SchwarzschildImpl::SchwarzschildImpl(
@@ -138,6 +197,8 @@ double SchwarzschildImpl::radius_at_horizon() const {
       return 2. * mass_;
     case SchwarzschildCoordinates::KerrSchildIsotropic:
       return kerr_schild_isotropic_radius_from_areal(2. * mass_, mass_);
+    case SchwarzschildCoordinates::MaximalIsotropic:
+      return maximal_isotropic_radius_from_areal(2. * mass_, mass_);
       // LCOV_EXCL_START
     default:
       ERROR("Missing case for SchwarzschildCoordinates");
@@ -172,13 +233,22 @@ void SchwarzschildVariables<DataType>::operator()(
     const gsl::not_null<Scalar<DataType>*> areal_radius,
     const gsl::not_null<Cache*> cache,
     detail::Tags::ArealRadius<DataType> /*meta*/) const {
-  ASSERT(coordinate_system == SchwarzschildCoordinates::KerrSchildIsotropic,
-         "The areal radius is only needed for 'KerrSchildIsotropic' "
-         "coordinates.");
   const auto& isotropic_radius =
       cache->get_var(*this, detail::Tags::Radius<DataType>{});
-  get(*areal_radius) =
-      kerr_schild_areal_radius_from_isotropic(get(isotropic_radius), mass);
+  switch (coordinate_system) {
+    case SchwarzschildCoordinates::KerrSchildIsotropic:
+      get(*areal_radius) =
+          kerr_schild_areal_radius_from_isotropic(get(isotropic_radius), mass);
+      break;
+    case SchwarzschildCoordinates::MaximalIsotropic:
+      get(*areal_radius) = kerr_schild_areal_radius_from_maximal_isotropic(
+          get(isotropic_radius), mass);
+      break;
+    default:
+      ERROR(
+          "The areal radius is only needed for 'KerrSchildIsotropic' "
+          "or 'MaximalIsotropic' coordinates.");
+  }
 }
 
 template <typename DataType>
@@ -240,6 +310,10 @@ void SchwarzschildVariables<DataType>::operator()(
           get(cache->get_var(*this, gr::Tags::Lapse<DataType>{}));
       get(*trace_extrinsic_curvature) =
           2. * mass * cube(lapse) / square(r) * (1. + 3. * mass / r);
+      break;
+    }
+    case SchwarzschildCoordinates::MaximalIsotropic: {
+      get(*trace_extrinsic_curvature) = 0.;
       break;
     }
       // LCOV_EXCL_START
@@ -304,6 +378,11 @@ void SchwarzschildVariables<DataType>::operator()(
           isotropic_prefactor * get<2>(x);
       break;
     }
+    case SchwarzschildCoordinates::MaximalIsotropic: {
+      std::fill(trace_extrinsic_curvature_gradient->begin(),
+                trace_extrinsic_curvature_gradient->end(), 0.);
+      break;
+    }
       // LCOV_EXCL_START
     default:
       ERROR("Missing case for SchwarzschildCoordinates");
@@ -331,6 +410,27 @@ void SchwarzschildVariables<DataType>::operator()(
       const auto& conformal_factor =
           get(cache->get_var(*this, Xcts::Tags::ConformalFactor<DataType>{}));
       get(*conformal_factor_minus_one) = conformal_factor - 1.;
+      break;
+    }
+    case SchwarzschildCoordinates::MaximalIsotropic: {
+      const auto r_areal =
+          get(cache->get_var(*this, detail::Tags::ArealRadius<DataType>{}));
+      DataType aux(r_areal.size(), 0.);
+      for (size_t i = 0; i < r_areal.size(); ++i) {
+        aux[i] =
+            sqrt(4. * r_areal[i] /
+                 (2. * r_areal[i] + mass +
+                  sqrt(4. * square(r_areal[i]) + 4. * r_areal[i] * mass +
+                       3. * square(mass)))) *
+                std::pow(
+                    (8. * r_areal[i] + 6. * mass +
+                     3. * sqrt(8. * square(r_areal[i]) +
+                               8. * r_areal[i] * mass + 6. * square(mass))) /
+                        ((4. + 3. * sqrt(2.)) * (2. * r_areal[i] - 3. * mass)),
+                    1. / (2. * sqrt(2.))) -
+            1.;
+      }
+      get(*conformal_factor_minus_one) = aux;
       break;
     }
       // LCOV_EXCL_START
@@ -361,6 +461,12 @@ void SchwarzschildVariables<DataType>::operator()(
       const auto& lapse =
           get(cache->get_var(*this, gr::Tags::Lapse<DataType>{}));
       get(*conformal_factor) = 2. * exp(1. / lapse - 1.) / (1. + 1. / lapse);
+      break;
+    }
+    case SchwarzschildCoordinates::MaximalIsotropic: {
+      const auto& conformal_factor_minus_one = get(cache->get_var(
+          *this, Xcts::Tags::ConformalFactorMinusOne<DataType>{}));
+      get(*conformal_factor) = conformal_factor_minus_one + 1.;
       break;
     }
       // LCOV_EXCL_START
@@ -407,6 +513,11 @@ void SchwarzschildVariables<DataType>::operator()(
       get<2>(*conformal_factor_gradient) = isotropic_prefactor * get<2>(x);
       break;
     }
+    case SchwarzschildCoordinates::MaximalIsotropic: {
+      std::fill(conformal_factor_gradient->begin(),
+                conformal_factor_gradient->end(), 0.);
+      break;
+    }
       // LCOV_EXCL_START
     default:
       ERROR("Missing case for SchwarzschildCoordinates");
@@ -432,6 +543,13 @@ void SchwarzschildVariables<DataType>::operator()(
       break;
     }
     case SchwarzschildCoordinates::KerrSchildIsotropic: {
+      const auto& lapse_times_conformal_factor = get(cache->get_var(
+          *this, Xcts::Tags::LapseTimesConformalFactor<DataType>{}));
+      get(*lapse_times_conformal_factor_minus_one) =
+          lapse_times_conformal_factor - 1.;
+      break;
+    }
+    case SchwarzschildCoordinates::MaximalIsotropic: {
       const auto& lapse_times_conformal_factor = get(cache->get_var(
           *this, Xcts::Tags::LapseTimesConformalFactor<DataType>{}));
       get(*lapse_times_conformal_factor_minus_one) =
@@ -470,6 +588,14 @@ void SchwarzschildVariables<DataType>::operator()(
       get(*lapse_times_conformal_factor) = lapse * conformal_factor;
       break;
     }
+    case SchwarzschildCoordinates::MaximalIsotropic: {
+      const auto& lapse =
+          get(cache->get_var(*this, gr::Tags::Lapse<DataType>{}));
+      const auto& conformal_factor =
+          get(cache->get_var(*this, Xcts::Tags::ConformalFactor<DataType>{}));
+      get(*lapse_times_conformal_factor) = lapse * conformal_factor;
+      break;
+    }
       // LCOV_EXCL_START
     default:
       ERROR("Missing case for SchwarzschildCoordinates");
@@ -499,6 +625,14 @@ void SchwarzschildVariables<DataType>::operator()(
       const auto& r =
           get(cache->get_var(*this, detail::Tags::ArealRadius<DataType>{}));
       get(*lapse) = 1. / sqrt(1. + 2. * mass / r);
+      break;
+    }
+    case SchwarzschildCoordinates::MaximalIsotropic: {
+      const auto& r_areal =
+          get(cache->get_var(*this, detail::Tags::ArealRadius<DataType>{}));
+      get(*lapse) =
+          sqrt(1. - 2. * mass / r_areal +
+               27. * square(square(mass)) / (16. * square(square(r_areal))));
       break;
     }
       // LCOV_EXCL_START
@@ -543,6 +677,10 @@ void SchwarzschildVariables<DataType>::operator()(
       get<0>(*deriv_lapse) = isotropic_prefactor * get<0>(x);
       get<1>(*deriv_lapse) = isotropic_prefactor * get<1>(x);
       get<2>(*deriv_lapse) = isotropic_prefactor * get<2>(x);
+      break;
+    }
+    case SchwarzschildCoordinates::MaximalIsotropic: {
+      std::fill(deriv_lapse->begin(), deriv_lapse->end(), 0.);
       break;
     }
       // LCOV_EXCL_START
@@ -598,6 +736,11 @@ void SchwarzschildVariables<DataType>::operator()(
           isotropic_prefactor * get<1>(x);
       get<2>(*lapse_times_conformal_factor_gradient) +=
           isotropic_prefactor * get<2>(x);
+      break;
+    }
+    case SchwarzschildCoordinates::MaximalIsotropic: {
+      std::fill(lapse_times_conformal_factor_gradient->begin(),
+                lapse_times_conformal_factor_gradient->end(), 0.);
       break;
     }
       // LCOV_EXCL_START
@@ -661,6 +804,17 @@ void SchwarzschildVariables<DataType>::operator()(
       get<2>(*shift_excess) *= isotropic_prefactor;
       break;
     }
+    case SchwarzschildCoordinates::MaximalIsotropic: {
+      const auto& r_areal =
+          get(cache->get_var(*this, detail::Tags::ArealRadius<DataType>{}));
+      get<0>(*shift_excess) =
+          .75 * sqrt(3) * square(mass) * get<0>(x) / pow(r_areal, 3);
+      get<1>(*shift_excess) =
+          .75 * sqrt(3) * square(mass) * get<1>(x) / pow(r_areal, 3);
+      get<2>(*shift_excess) =
+          .75 * sqrt(3) * square(mass) * get<2>(x) / pow(r_areal, 3);
+      break;
+    }
       // LCOV_EXCL_START
     default:
       ERROR("Missing case for SchwarzschildCoordinates");
@@ -714,6 +868,10 @@ void SchwarzschildVariables<DataType>::operator()(
       }
       break;
     }
+    case SchwarzschildCoordinates::MaximalIsotropic: {
+      std::fill(deriv_shift_excess->begin(), deriv_shift_excess->end(), 0.);
+      break;
+    }
       // LCOV_EXCL_START
     default:
       ERROR("Missing case for SchwarzschildCoordinates");
@@ -747,6 +905,22 @@ void SchwarzschildVariables<DataType>::operator()(
       break;
     }
     case SchwarzschildCoordinates::KerrSchildIsotropic: {
+      // Background shift and \bar{u} are both zero
+      const auto& longitudinal_shift_minus_dt_conformal_metric = cache->get_var(
+          *this,
+          Xcts::Tags::LongitudinalShiftExcess<DataType, 3, Frame::Inertial>{});
+      Xcts::extrinsic_curvature(
+          extrinsic_curvature,
+          cache->get_var(*this, Xcts::Tags::ConformalFactor<DataType>{}),
+          cache->get_var(*this, gr::Tags::Lapse<DataType>{}),
+          cache->get_var(
+              *this,
+              Xcts::Tags::ConformalMetric<DataType, 3, Frame::Inertial>{}),
+          longitudinal_shift_minus_dt_conformal_metric,
+          cache->get_var(*this, gr::Tags::TraceExtrinsicCurvature<DataType>{}));
+      break;
+    }
+    case SchwarzschildCoordinates::MaximalIsotropic: {
       // Background shift and \bar{u} are both zero
       const auto& longitudinal_shift_minus_dt_conformal_metric = cache->get_var(
           *this,
@@ -796,7 +970,7 @@ void SchwarzschildVariables<DataType>::operator()(
   std::fill(momentum_density->begin(), momentum_density->end(), 0.);
 }
 
-template class SchwarzschildVariables<double>;
+// template class SchwarzschildVariables<double>;
 template class SchwarzschildVariables<DataVector>;
 
 }  // namespace detail
@@ -806,15 +980,15 @@ PUP::able::PUP_ID Schwarzschild::my_PUP_ID = 0;  // NOLINT
 }  // namespace Xcts::Solutions
 
 // Instantiate implementations for common variables
-template class Xcts::Solutions::CommonVariables<
+/*template class Xcts::Solutions::CommonVariables<
     double,
-    typename Xcts::Solutions::detail::SchwarzschildVariables<double>::Cache>;
+    typename Xcts::Solutions::detail::SchwarzschildVariables<double>::Cache>;*/
 template class Xcts::Solutions::CommonVariables<
     DataVector, typename Xcts::Solutions::detail::SchwarzschildVariables<
                     DataVector>::Cache>;
-template class Xcts::AnalyticData::CommonVariables<
+/*template class Xcts::AnalyticData::CommonVariables<
     double,
-    typename Xcts::Solutions::detail::SchwarzschildVariables<double>::Cache>;
+    typename Xcts::Solutions::detail::SchwarzschildVariables<double>::Cache>;*/
 template class Xcts::AnalyticData::CommonVariables<
     DataVector, typename Xcts::Solutions::detail::SchwarzschildVariables<
                     DataVector>::Cache>;
