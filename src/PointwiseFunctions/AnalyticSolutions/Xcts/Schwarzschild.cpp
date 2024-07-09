@@ -123,59 +123,60 @@ DataVector kerr_schild_areal_radius_from_isotropic(
       isotropic_radius, isotropic_radius + mass, 1.0e-12, 1.0e-15);
 }
 
-template <typename DataType>
-DataType maximal_isotropic_radius_from_areal(const DataType& areal_radius,
-                                             const double mass) {
+double maximal_isotropic_radius_from_areal(const double areal_radius,
+                                           const double mass) {
   return .25 *
          (2. * areal_radius + mass +
           sqrt(4. * square(areal_radius) + 4. * areal_radius * mass +
                3. * square(mass))) *
-         pow((4. + 3. * sqrt(2.)) * (2. * areal_radius - 3. * mass) /
-                 (8. * areal_radius + 6. * mass +
-                  3. * sqrt(8. * square(areal_radius) +
-                            8. * areal_radius * mass + 6. * square(mass))),
-             1. / sqrt(2.));
+         std::pow((4. + 3. * sqrt(2.)) * (2. * areal_radius - 3. * mass) /
+                      (8. * areal_radius + 6. * mass +
+                       3. * sqrt(8. * square(areal_radius) +
+                                 8. * areal_radius * mass + 6. * square(mass))),
+                  1. / sqrt(2.));
 }
 
-template <typename DataType>
-DataType maximal_isotropic_radius_from_areal_deriv(
-    const DataType& areal_radius, const DataType& isotropic_radius,
-    const double mass) {
-  // r_isotropic = (A/4) * B^(1/sqrt(2))
-  const DataType S = sqrt(8. * square(areal_radius) + 8. * areal_radius * mass +
-                          6. * square(mass));
-  const double C = 4. + 3. * sqrt(2.);
-  const DataType D = 8. * areal_radius + 6. * mass + 3. * S;
-  const DataType E = 2. * areal_radius - 3. * mass;
-  const DataType F = 2. * areal_radius + mass;
-  const DataType A = F + S / sqrt(2.);
-  const DataType B = C * E / D;
-  const DataType dAdR = 2. + (4. / sqrt(2.)) * F / S;
-  const DataType dBdR = C * (2. * D - E * (8. + 12. * F / S)) / square(D);
-
-  return isotropic_radius * (dAdR / A + dBdR / (B * sqrt(2.)));
+double kerr_schild_areal_radius_from_maximal_isotropic(
+    const double isotropic_radius, const double mass) {
+  return RootFinder::toms748(
+      [&isotropic_radius, &mass](const double areal_radius) {
+        return .25 *
+                   (2. * areal_radius + mass +
+                    sqrt(4. * square(areal_radius) + 4. * areal_radius * mass +
+                         3. * square(mass))) *
+                   std::pow((4. + 3. * sqrt(2.)) *
+                                (2. * areal_radius - 3. * mass) /
+                                (8. * areal_radius + 6. * mass +
+                                 3. * sqrt(8. * square(areal_radius) +
+                                           8. * areal_radius * mass +
+                                           6. * square(mass))),
+                            1. / sqrt(2.)) -
+               isotropic_radius;
+      },
+      1.5 * mass, 1e9, 1.0e-12, 1.0e-15);
 }
 
-template <typename DataType>
-DataType areal_radius_from_maximal_isotropic(const DataType& isotropic_radius,
-                                             const double mass) {
-  const auto residual = [&isotropic_radius, &mass](const auto areal_radius,
-                                                   const size_t i = 0) {
-    if constexpr (simd::is_batch<std::decay_t<decltype(areal_radius)>>::value) {
-      return maximal_isotropic_radius_from_areal(areal_radius, mass) -
-             simd::load_unaligned(&(get_element(isotropic_radius, i)));
-    } else {
-      return maximal_isotropic_radius_from_areal(areal_radius, mass) -
-             get_element(isotropic_radius, i);
-    }
-  };
-  const auto lower_bound =
-      make_with_value<DataType>(isotropic_radius, 1.5 * mass);
-  const auto upper_bound = make_with_value<DataType>(isotropic_radius, 1e9);
-  return RootFinder::toms748<false>(residual, lower_bound, upper_bound, 1.0e-12,
-                                    1.0e-15);
+DataVector kerr_schild_areal_radius_from_maximal_isotropic(
+    const DataVector& isotropic_radius, const double mass) {
+  DataVector lower(isotropic_radius.size(), 1.5 * mass);
+  DataVector upper(isotropic_radius.size(), 1e9);
+  return RootFinder::toms748<true>(
+      [&isotropic_radius, &mass](const auto areal_radius, const size_t i) {
+        return .25 *
+                   (2. * areal_radius + mass +
+                    sqrt(4. * square(areal_radius) + 4. * areal_radius * mass +
+                         3. * square(mass))) *
+                   std::pow((4. + 3. * sqrt(2.)) *
+                                (2. * areal_radius - 3. * mass) /
+                                (8. * areal_radius + 6. * mass +
+                                 3. * sqrt(8. * square(areal_radius) +
+                                           8. * areal_radius * mass +
+                                           6. * square(mass))),
+                            1. / sqrt(2.)) -
+               isotropic_radius[i];
+      },
+      lower, upper, 1.0e-12, 1.0e-15);
 }
-
 }  // namespace
 
 SchwarzschildImpl::SchwarzschildImpl(
@@ -240,8 +241,8 @@ void SchwarzschildVariables<DataType>::operator()(
           kerr_schild_areal_radius_from_isotropic(get(isotropic_radius), mass);
       break;
     case SchwarzschildCoordinates::MaximalIsotropic:
-      get(*areal_radius) =
-          areal_radius_from_maximal_isotropic(get(isotropic_radius), mass);
+      get(*areal_radius) = kerr_schild_areal_radius_from_maximal_isotropic(
+          get(isotropic_radius), mass);
       break;
     default:
       ERROR(
@@ -412,9 +413,24 @@ void SchwarzschildVariables<DataType>::operator()(
       break;
     }
     case SchwarzschildCoordinates::MaximalIsotropic: {
-      const auto& conformal_factor =
-          get(cache->get_var(*this, Xcts::Tags::ConformalFactor<DataType>{}));
-      get(*conformal_factor_minus_one) = conformal_factor - 1.;
+      const auto r_areal =
+          get(cache->get_var(*this, detail::Tags::ArealRadius<DataType>{}));
+      DataType aux(r_areal.size(), 0.);
+      for (size_t i = 0; i < r_areal.size(); ++i) {
+        aux[i] =
+            sqrt(4. * r_areal[i] /
+                 (2. * r_areal[i] + mass +
+                  sqrt(4. * square(r_areal[i]) + 4. * r_areal[i] * mass +
+                       3. * square(mass)))) *
+                std::pow(
+                    (8. * r_areal[i] + 6. * mass +
+                     3. * sqrt(8. * square(r_areal[i]) +
+                               8. * r_areal[i] * mass + 6. * square(mass))) /
+                        ((4. + 3. * sqrt(2.)) * (2. * r_areal[i] - 3. * mass)),
+                    1. / (2. * sqrt(2.))) -
+            1.;
+      }
+      get(*conformal_factor_minus_one) = aux;
       break;
     }
       // LCOV_EXCL_START
@@ -448,11 +464,9 @@ void SchwarzschildVariables<DataType>::operator()(
       break;
     }
     case SchwarzschildCoordinates::MaximalIsotropic: {
-      const auto r_areal =
-          get(cache->get_var(*this, detail::Tags::ArealRadius<DataType>{}));
-      const auto& r_iso =
-          get(cache->get_var(*this, detail::Tags::Radius<DataType>{}));
-      get(*conformal_factor) = sqrt(r_areal / r_iso);
+      const auto& conformal_factor_minus_one = get(cache->get_var(
+          *this, Xcts::Tags::ConformalFactorMinusOne<DataType>{}));
+      get(*conformal_factor) = conformal_factor_minus_one + 1.;
       break;
     }
       // LCOV_EXCL_START
@@ -500,19 +514,8 @@ void SchwarzschildVariables<DataType>::operator()(
       break;
     }
     case SchwarzschildCoordinates::MaximalIsotropic: {
-      const auto& r_iso =
-          get(cache->get_var(*this, detail::Tags::Radius<DataType>{}));
-      const auto& r_areal =
-          get(cache->get_var(*this, detail::Tags::ArealRadius<DataType>{}));
-
-      const DataType drdR =
-          maximal_isotropic_radius_from_areal_deriv(r_areal, r_iso, mass);
-      const DataType dPsidR = .5 * sqrt(r_iso / r_areal) *
-                              (1. / r_iso - (r_areal / square(r_iso)) * drdR);
-      const DataType prefactor = dPsidR / (drdR * r_iso);
-      get<0>(*conformal_factor_gradient) = prefactor * get<0>(x);
-      get<1>(*conformal_factor_gradient) = prefactor * get<1>(x);
-      get<2>(*conformal_factor_gradient) = prefactor * get<2>(x);
+      std::fill(conformal_factor_gradient->begin(),
+                conformal_factor_gradient->end(), 0.);
       break;
     }
       // LCOV_EXCL_START
@@ -677,23 +680,7 @@ void SchwarzschildVariables<DataType>::operator()(
       break;
     }
     case SchwarzschildCoordinates::MaximalIsotropic: {
-      const auto& r_areal =
-          get(cache->get_var(*this, detail::Tags::ArealRadius<DataType>{}));
-      const auto& r_iso =
-          get(cache->get_var(*this, detail::Tags::Radius<DataType>{}));
-      const auto& lapse =
-          get(cache->get_var(*this, gr::Tags::Lapse<DataType>{}));
-
-      const DataType drdR =
-          maximal_isotropic_radius_from_areal_deriv(r_areal, r_iso, mass);
-      const DataType dLapsedR =
-          (1. / (2. * lapse)) *
-          (2. * mass / square(r_areal) -
-           27. * square(square(mass)) / (4. * pow(r_areal, 5)));
-      const DataType prefactor = dLapsedR / (drdR * r_iso);
-      get<0>(*deriv_lapse) = prefactor * get<0>(x);
-      get<1>(*deriv_lapse) = prefactor * get<1>(x);
-      get<2>(*deriv_lapse) = prefactor * get<2>(x);
+      std::fill(deriv_lapse->begin(), deriv_lapse->end(), 0.);
       break;
     }
       // LCOV_EXCL_START
@@ -752,26 +739,8 @@ void SchwarzschildVariables<DataType>::operator()(
       break;
     }
     case SchwarzschildCoordinates::MaximalIsotropic: {
-      const auto& conformal_factor =
-          get(cache->get_var(*this, Xcts::Tags::ConformalFactor<DataType>{}));
-      const auto& conformal_factor_gradient = cache->get_var(
-          *this, ::Tags::deriv<Xcts::Tags::ConformalFactorMinusOne<DataType>,
-                               tmpl::size_t<3>, Frame::Inertial>{});
-      const auto& lapse =
-          get(cache->get_var(*this, gr::Tags::Lapse<DataType>{}));
-      const auto& deriv_lapse = cache->get_var(
-          *this, ::Tags::deriv<gr::Tags::Lapse<DataType>, tmpl::size_t<3>,
-                               Frame::Inertial>{});
-      *lapse_times_conformal_factor_gradient = conformal_factor_gradient;
-      get<0>(*lapse_times_conformal_factor_gradient) *= lapse;
-      get<1>(*lapse_times_conformal_factor_gradient) *= lapse;
-      get<2>(*lapse_times_conformal_factor_gradient) *= lapse;
-      get<0>(*lapse_times_conformal_factor_gradient) +=
-          conformal_factor * get<0>(deriv_lapse);
-      get<1>(*lapse_times_conformal_factor_gradient) +=
-          conformal_factor * get<1>(deriv_lapse);
-      get<2>(*lapse_times_conformal_factor_gradient) +=
-          conformal_factor * get<2>(deriv_lapse);
+      std::fill(lapse_times_conformal_factor_gradient->begin(),
+                lapse_times_conformal_factor_gradient->end(), 0.);
       break;
     }
       // LCOV_EXCL_START
@@ -909,27 +878,7 @@ void SchwarzschildVariables<DataType>::operator()(
       break;
     }
     case SchwarzschildCoordinates::MaximalIsotropic: {
-      const auto& r_areal =
-          get(cache->get_var(*this, detail::Tags::ArealRadius<DataType>{}));
-      const auto& r_iso =
-          get(cache->get_var(*this, detail::Tags::Radius<DataType>{}));
-      const DataType BetaRadial =
-          .75 * sqrt(3) * square(mass) * r_iso / pow(r_areal, 3);
-
-      const DataType drdR =
-          maximal_isotropic_radius_from_areal_deriv(r_areal, r_iso, mass);
-      const DataType dBetaRadialdR =
-          .75 * sqrt(3) * square(mass) *
-          (drdR / pow(r_areal, 3) - 3. * r_iso / pow(r_areal, 4));
-      for (size_t i = 0; i < 3; ++i) {
-        for (size_t j = 0; j < 3; ++j) {
-          deriv_shift_excess->get(i, j) =
-              (dBetaRadialdR / (drdR * square(r_iso)) -
-               BetaRadial / pow(r_iso, 3)) *
-              x.get(i) * x.get(j);
-        }
-        deriv_shift_excess->get(i, i) += BetaRadial / r_iso;
-      }
+      std::fill(deriv_shift_excess->begin(), deriv_shift_excess->end(), 0.);
       break;
     }
       // LCOV_EXCL_START
@@ -1030,7 +979,7 @@ void SchwarzschildVariables<DataType>::operator()(
   std::fill(momentum_density->begin(), momentum_density->end(), 0.);
 }
 
-template class SchwarzschildVariables<double>;
+// template class SchwarzschildVariables<double>;
 template class SchwarzschildVariables<DataVector>;
 
 }  // namespace detail
@@ -1040,15 +989,15 @@ PUP::able::PUP_ID Schwarzschild::my_PUP_ID = 0;  // NOLINT
 }  // namespace Xcts::Solutions
 
 // Instantiate implementations for common variables
-template class Xcts::Solutions::CommonVariables<
+/*template class Xcts::Solutions::CommonVariables<
     double,
-    typename Xcts::Solutions::detail::SchwarzschildVariables<double>::Cache>;
+    typename Xcts::Solutions::detail::SchwarzschildVariables<double>::Cache>;*/
 template class Xcts::Solutions::CommonVariables<
     DataVector, typename Xcts::Solutions::detail::SchwarzschildVariables<
                     DataVector>::Cache>;
-template class Xcts::AnalyticData::CommonVariables<
+/*template class Xcts::AnalyticData::CommonVariables<
     double,
-    typename Xcts::Solutions::detail::SchwarzschildVariables<double>::Cache>;
+    typename Xcts::Solutions::detail::SchwarzschildVariables<double>::Cache>;*/
 template class Xcts::AnalyticData::CommonVariables<
     DataVector, typename Xcts::Solutions::detail::SchwarzschildVariables<
                     DataVector>::Cache>;
