@@ -1666,6 +1666,7 @@ BinaryWithGravitationalWavesVariables<DataType>::get_past_shift(
         0.5 * momentum_left_past.get(i) / get(distance_left_past) +
         0.5 * momentum_right_past.get(i) / get(distance_right_past);
   }
+  */
   // Horizon Penetrating shift
   /*
   DataType present_time(get_size(get<0>(x)), max_time_interpolator);
@@ -1687,9 +1688,8 @@ BinaryWithGravitationalWavesVariables<DataType>::get_past_shift(
     shift_past.get(i) +=
         shift_r_left * normal_left.get(i) + shift_r_right * normal_right.get(i);
   }
-
-  return shift_past;
   */
+  return shift_past;
 }
 
 template class BinaryWithGravitationalWavesVariables<DataVector>;
