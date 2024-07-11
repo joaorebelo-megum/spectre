@@ -557,7 +557,7 @@ void BinaryWithGravitationalWavesVariables<DataType>::operator()(
     Xcts::Tags::LapseTimesConformalFactorMinusOne<DataType> /*meta*/) const {
   DataType present_time(get_size(get<0>(x)), max_time_interpolator);
   const auto lapse = get_past_lapse(present_time);
-  // const auto conformal_factor = get_past_conformal_factor(present_time);
+  const auto conformal_factor = get_past_conformal_factor(present_time);
   get(*lapse_times_conformal_factor_minus_one) =
       get(lapse) * get(conformal_factor) - 1.;
   // get(lapse) - 1.;
