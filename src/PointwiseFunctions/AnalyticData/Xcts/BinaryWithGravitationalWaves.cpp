@@ -543,10 +543,10 @@ void BinaryWithGravitationalWavesVariables<DataType>::operator()(
     const gsl::not_null<Scalar<DataType>*> conformal_factor_minus_one,
     const gsl::not_null<Cache*> /*cache*/,
     Xcts::Tags::ConformalFactorMinusOne<DataType> /*meta*/) const {
-  // DataType present_time(get_size(get<0>(x)), max_time_interpolator);
-  // const auto conformal_factor_past = get_past_conformal_factor(present_time);
-  // get(*conformal_factor_minus_one) = get(conformal_factor_past) - 1.0;
-  get(*conformal_factor_minus_one) = 0.;
+  DataType present_time(get_size(get<0>(x)), max_time_interpolator);
+  const auto conformal_factor_past = get_past_conformal_factor(present_time);
+  get(*conformal_factor_minus_one) = get(conformal_factor_past) - 1.0;
+  // get(*conformal_factor_minus_one) = 0.;
 }
 
 template <typename DataType>
@@ -559,8 +559,8 @@ void BinaryWithGravitationalWavesVariables<DataType>::operator()(
   const auto lapse = get_past_lapse(present_time);
   // const auto conformal_factor = get_past_conformal_factor(present_time);
   get(*lapse_times_conformal_factor_minus_one) =
-      // get(lapse) * get(conformal_factor) - 1.;
-      get(lapse) - 1.;
+      get(lapse) * get(conformal_factor) - 1.;
+  // get(lapse) - 1.;
 }
 
 template <typename DataType>
