@@ -418,7 +418,9 @@ struct BinaryWithGravitationalWavesVariables
   Scalar<DataType> get_t_conformal_factor(DataType t) const;
   Scalar<DataType> get_t_lapse(DataType t) const;
   tnsr::I<DataType, 3> get_t_shift(DataType t) const;
-  // tnsr::ab<DataType, 3> get_t_spacetime_metric(DataType t) const;
+  tnsr::aa<DataType, 3> get_t_boosted_spacetime_metric_left(DataType t) const;
+  tnsr::aa<DataType, 3> get_t_boosted_spacetime_metric_right(DataType t) const;
+  tnsr::aa<DataType, 3> get_t_superposed_spacetime_metric(DataType t) const;
 };
 
 }  // namespace detail

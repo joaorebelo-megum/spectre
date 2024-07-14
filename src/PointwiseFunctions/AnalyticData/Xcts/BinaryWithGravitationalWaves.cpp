@@ -19,7 +19,12 @@
 #include "NumericalAlgorithms/RootFinding/TOMS748.hpp"
 #include "PointwiseFunctions/AnalyticData/Xcts/CommonVariables.tpp"
 #include "PointwiseFunctions/Elasticity/Strain.hpp"
+#include "PointwiseFunctions/GeneralRelativity/Lapse.hpp"
+#include "PointwiseFunctions/GeneralRelativity/Shift.hpp"
+#include "PointwiseFunctions/GeneralRelativity/SpacetimeMetric.hpp"
+#include "PointwiseFunctions/GeneralRelativity/SpatialMetric.hpp"
 #include "PointwiseFunctions/GeneralRelativity/Tags.hpp"
+#include "PointwiseFunctions/SpecialRelativity/LorentzBoostMatrix.hpp"
 #include "PointwiseFunctions/Xcts/LongitudinalOperator.hpp"
 #include "Utilities/ConstantExpressions.hpp"
 #include "Utilities/Gsl.hpp"
@@ -314,8 +319,17 @@ void BinaryWithGravitationalWavesVariables<DataType>::operator()(
     const gsl::not_null<Cache*> /*cache*/,
     gr::Tags::TraceExtrinsicCurvature<DataType> /*meta*/) const {
   DataType present_time(get_size(get<0>(x)), max_time_interpolator);
-  get(*trace_extrinsic_curvature) =
-      get(get_t_trace_extrinsic_curvature(present_time));
+  ASSERT(mesh.has_value() and inv_jacobian.has_value(),
+         "Need a mesh and a Jacobian for numeric differentiation.");
+  if constexpr (std::is_same_v<DataType, DataVector>) {
+    get(*trace_extrinsic_curvature) =
+        get(get_t_trace_extrinsic_curvature(present_time));
+  } else {
+    (void)trace_extrinsic_curvature;
+    ERROR(
+        "Numeric differentiation only works with DataVectors because it needs "
+        "a grid.");
+  }
 }
 
 template <typename DataType>
@@ -327,6 +341,7 @@ void BinaryWithGravitationalWavesVariables<DataType>::operator()(
       cache->get_var(*this, gr::Tags::TraceExtrinsicCurvature<DataType>{});
   double time_displacement = 0.1;
   DataType time_back(get(trace_extrinsic_curvature).size(), -time_displacement);
+  /*
   DataType present_time(get_size(get<0>(x)), max_time_interpolator);
   const auto distance_left = get_t_distance_left(present_time);
   const auto distance_right = get_t_distance_right(present_time);
@@ -337,10 +352,22 @@ void BinaryWithGravitationalWavesVariables<DataType>::operator()(
   const auto normal_right = get_t_normal_right(present_time);
   const auto momentum_left = get_t_momentum_left(present_time);
   const auto momentum_right = get_t_momentum_right(present_time);
-  Scalar<DataType> trace_extrinsic_curvature_back =
-      get_t_trace_extrinsic_curvature(time_back);
+  */
+  Scalar<DataType> trace_extrinsic_curvature_back;
+  ASSERT(mesh.has_value() and inv_jacobian.has_value(),
+         "Need a mesh and a Jacobian for numeric differentiation.");
+  if constexpr (std::is_same_v<DataType, DataVector>) {
+    trace_extrinsic_curvature_back = get_t_trace_extrinsic_curvature(time_back);
+  } else {
+    (void)dt_trace_extrinsic_curvature;
+    (void)cache;
+    ERROR(
+        "Numeric differentiation only works with DataVectors because it needs "
+        "a grid.");
+  }
+
   get(*dt_trace_extrinsic_curvature) =
-      square(
+      /*square(
           1. +
           .75 * sqrt(3) * square(mass_left) * normal_left.get(1) *
               (momentum_left.get(1) / mass_left) /
@@ -353,6 +380,7 @@ void BinaryWithGravitationalWavesVariables<DataType>::operator()(
                sqrt(square(areal_distance_right) *
                         square(areal_distance_right) -
                     2. * mass_right * cube(areal_distance_right) + 1.6875))) *
+       */
       (get(trace_extrinsic_curvature) - get(trace_extrinsic_curvature_back)) /
       time_displacement;
 }
@@ -363,7 +391,6 @@ void BinaryWithGravitationalWavesVariables<DataType>::operator()(
     const gsl::not_null<Cache*> /*cache*/,
     Xcts::Tags::ShiftBackground<DataType, 3, Frame::Inertial> /*meta*/) const {
   std::fill(shift_background->begin(), shift_background->end(), 0.);
-
   // PN shift
   /*
   DataType present_time(get_size(get<0>(x)), max_time_interpolator);
@@ -393,7 +420,7 @@ void BinaryWithGravitationalWavesVariables<DataType>::operator()(
   }
   */
   // Horizon Penetrating Shift
-
+  /*
   DataType present_time(get_size(get<0>(x)), max_time_interpolator);
   const auto distance_left_t = get_t_distance_left(present_time);
   const auto distance_right_t = get_t_distance_right(present_time);
@@ -413,7 +440,7 @@ void BinaryWithGravitationalWavesVariables<DataType>::operator()(
     shift_background->get(i) +=
         shift_r_left * normal_left.get(i) + shift_r_right * normal_right.get(i);
   }
-
+  */
   // Co-rotaing shift
   /*
   const double total_mass = mass_left + mass_right;
@@ -424,6 +451,17 @@ void BinaryWithGravitationalWavesVariables<DataType>::operator()(
                                           total_mass / get(separation));
   get<0>(*shift_background) += -angular_velocity * get<1>(x);
   get<1>(*shift_background) += angular_velocity * get<0>(x);
+  */
+  // Boosted Horizon Penetrating superposed shift
+  /*
+  DataType present_time(get_size(get<0>(x)), max_time_interpolator);
+  const auto superposed_spacetime_metric =
+      get_t_superposed_spacetime_metric(present_time);
+  const auto& inv_conformal_metric = cache->get_var(
+      *this,
+      ::Xcts::Tags::InverseConformalMetric<DataType, Dim, Frame::Inertial>{});
+  gr::shift(shift_background, superposed_spacetime_metric,
+  inv_conformal_metric);
   */
 }
 
@@ -471,7 +509,7 @@ void BinaryWithGravitationalWavesVariables<DataType>::operator()(
   for (size_t i = 0; i < 3; ++i) {
     for (size_t j = 0; j <= i; ++j) {
       longitudinal_shift_background_minus_dt_conformal_metric->get(i, j) +=
-          (1. +
+          /*(1. +
            .75 * sqrt(3) * square(mass_left) * normal_left.get(1) *
                (momentum_left.get(1) / mass_left) /
                ((1. - 2. * mass_left / areal_distance_left) *
@@ -483,6 +521,7 @@ void BinaryWithGravitationalWavesVariables<DataType>::operator()(
                 sqrt(square(areal_distance_right) *
                          square(areal_distance_right) -
                      2. * mass_right * cube(areal_distance_right) + 1.6875))) *
+         */
           (inv_conformal_metric.get(i, j) -
            inv_conformal_metric_back.get(i, j)) /
           time_displacement;
@@ -1140,35 +1179,78 @@ BinaryWithGravitationalWavesVariables<DataType>::get_t_pn_extrinsic_curvature(
 template <typename DataType>
 Scalar<DataType> BinaryWithGravitationalWavesVariables<
     DataType>::get_t_trace_extrinsic_curvature(DataType t) const {
+  // PN Trace Extrinsic Curvatfure
+  /*
   const auto pn_extrinsic_curvature_t = get_t_pn_extrinsic_curvature(t);
   const auto conformal_metric_t = get_t_conformal_metric(t);
   tnsr::ii<DataType, 3> inv_conformal_metric_t{t.size()};
   const auto det_and_inv = determinant_and_inverse(conformal_metric_t);
   return trace(pn_extrinsic_curvature_t, det_and_inv.second);
+  */
+  // Boosted Horizon Penetrating superposed trace extrinsic curvature
+  tnsr::ii<DataType, 3> extrinsic_curvature{t.size()};
+  std::fill(extrinsic_curvature.begin(), extrinsic_curvature.end(), 0.);
+
+  double time_displacement = 0.1;
+  DataType time_back(get_size(x.get(0)), t[0] - time_displacement);
+  const auto conformal_metric = get_t_conformal_metric(t);
+  const auto inv_conformal_metric =
+      determinant_and_inverse(conformal_metric).second;
+  const auto conformal_metric_back = get_t_conformal_metric(time_back);
+  const auto inv_conformal_metric_back =
+      determinant_and_inverse(conformal_metric_back).second;
+  const auto lapse = get_t_lapse(t);
+  for (size_t i = 0; i < 3; ++i) {
+    for (size_t j = 0; j <= i; ++j) {
+      extrinsic_curvature.get(i, j) += (inv_conformal_metric.get(i, j) -
+                                        inv_conformal_metric_back.get(i, j)) /
+                                       (time_displacement * (-2.) * get(lapse));
+    }
+  }
+
+  const auto shift = get_t_shift(t);
+  const auto shift_down = raise_or_lower_index(shift, conformal_metric);
+  const auto deriv_shift =
+      partial_derivative(shift_down, mesh->get(), inv_jacobian->get());
+  const auto deriv_conformal_metric =
+      partial_derivative(conformal_metric, mesh->get(), inv_jacobian->get());
+  const auto christoffel_second_kind =
+      gr::christoffel_second_kind(deriv_conformal_metric, inv_conformal_metric);
+  const auto covariant_deriv_shift_contribution = tenex::evaluate<ti::i, ti::j>(
+      deriv_shift(ti::i, ti::j) -
+      christoffel_second_kind(ti::K, ti::i, ti::j) * shift_down(ti::k) +
+      deriv_shift(ti::j, ti::i) -
+      christoffel_second_kind(ti::K, ti::j, ti::i) * shift_down(ti::k));
+
+  for (size_t i = 0; i < 3; ++i) {
+    for (size_t j = 0; j <= i; ++j) {
+      extrinsic_curvature.get(i, j) +=
+          covariant_deriv_shift_contribution.get(i, j) / (2. * get(lapse));
+    }
+  }
+
+  return trace(extrinsic_curvature, inv_conformal_metric);
 }
 
 template <typename DataType>
 tnsr::ii<DataType, 3>
 BinaryWithGravitationalWavesVariables<DataType>::get_t_conformal_metric(
     DataType t) const {
-  const auto distance_left_t = get_t_distance_left(t);
-  const auto distance_right_t = get_t_distance_right(t);
+  // Boosted Horizon Penetrating superposed spatial metric
   const auto conformal_factor_t = get_t_conformal_factor(t);
   const auto radiative_term = get_t_radiative_term(t);
-  tnsr::ii<DataType, 3> conformal_metric_t{t.size()};
+  const auto superposed_spacetime_metric_t =
+      get_t_superposed_spacetime_metric(t);
+  auto conformal_metric = gr::spatial_metric(superposed_spacetime_metric_t);
   for (size_t i = 0; i < 3; ++i) {
     for (size_t j = 0; j <= i; ++j) {
-      conformal_metric_t.get(i, j) =
+      conformal_metric.get(i, j) +=
           radiative_term.get(i, j) /
           (get(conformal_factor_t) * get(conformal_factor_t) *
            get(conformal_factor_t) * get(conformal_factor_t));
     }
-    conformal_metric_t.get(i, i) = 1.;
-    // conformal_metric_t.get(i, i) =
-    //     (get(conformal_factor_t) * get(conformal_factor_t) *
-    //      get(conformal_factor_t) * get(conformal_factor_t));
   }
-  return conformal_metric_t;
+  return conformal_metric;
 }
 
 template <typename DataType>
@@ -1551,7 +1633,7 @@ BinaryWithGravitationalWavesVariables<DataType>::get_t_conformal_factor(
   get(conformal_factor_t) = pn_conformal_factor_t;
   */
   // Horizon Penetrating conformal factor
-
+  /*
   const auto areal_distance_left =
       find_areal_distance_left(get(distance_left_t));
   const auto areal_distance_right =
@@ -1588,7 +1670,9 @@ BinaryWithGravitationalWavesVariables<DataType>::get_t_conformal_factor(
   }
   get(conformal_factor_t) =
       -1. + conformal_factor_left + conformal_factor_right;
-
+  */
+  // Boosted superposed Horizon Penetrating conformal factor
+  get(conformal_factor_t) = 1.;
   return conformal_factor_t;
 }
 
@@ -1596,6 +1680,7 @@ template <typename DataType>
 Scalar<DataType> BinaryWithGravitationalWavesVariables<DataType>::get_t_lapse(
     DataType t) const {
   Scalar<DataType> lapse_t{t.size()};
+
   // PN Lapse
   /*
   const auto conformal_factor_t = get_t_conformal_factor(t);
@@ -1603,7 +1688,7 @@ Scalar<DataType> BinaryWithGravitationalWavesVariables<DataType>::get_t_lapse(
   get(conformal_factor_t);
   */
   // Horizon Penetrating Lapse
-
+  /*
   const auto distance_left_t = get_t_distance_left(t);
   const auto distance_right_t = get_t_distance_right(t);
   const auto areal_distance_left =
@@ -1621,15 +1706,19 @@ Scalar<DataType> BinaryWithGravitationalWavesVariables<DataType>::get_t_lapse(
                               (16. * square(square(areal_distance_right[i]))));
   }
   get(lapse_t) = -1. + lapse_left + lapse_right;
-
+  */
+  // Boosted superposed Horizon Penetrating Lapse
+  const auto superposed_spacetime_metric = get_t_superposed_spacetime_metric(t);
+  const auto shift = get_t_shift(t);
+  gr::lapse(make_not_null(&lapse_t), shift, superposed_spacetime_metric);
   return lapse_t;
 }
 
 template <typename DataType>
 tnsr::I<DataType, 3>
 BinaryWithGravitationalWavesVariables<DataType>::get_t_shift(DataType t) const {
-  tnsr::I<DataType, 3> shift_t{t.size()};
-  std::fill(shift_t.begin(), shift_t.end(), 0.);
+  // tnsr::I<DataType, 3> shift_t{t.size()};
+  // std::fill(shift_t.begin(), shift_t.end(), 0.);
 
   // PN shift
   /*
@@ -1681,7 +1770,201 @@ BinaryWithGravitationalWavesVariables<DataType>::get_t_shift(DataType t) const {
         shift_r_left * normal_left.get(i) + shift_r_right * normal_right.get(i);
   }
   */
-  return shift_t;
+  // Boosted superposed Horizon Penetrating Shift
+  const auto superposed_spacetime_metric = get_t_superposed_spacetime_metric(t);
+  const auto conformal_metric = get_t_conformal_metric(t);
+  const auto inv_conformal_metric =
+      determinant_and_inverse(conformal_metric).second;
+  return gr::shift(superposed_spacetime_metric, inv_conformal_metric);
+}
+
+template <typename DataType>
+tnsr::aa<DataType, 3> BinaryWithGravitationalWavesVariables<
+    DataType>::get_t_boosted_spacetime_metric_left(DataType t) const {
+  const auto distance_left_t = get_t_distance_left(t);
+  const auto areal_distance_left =
+      find_areal_distance_left(get(distance_left_t));
+  const auto momentum_left_t = get_t_momentum_left(t);
+  const auto normal_left_t = get_t_normal_left(t);
+
+  // Schwarzschild Horizon Penetrating lapse
+  Scalar<DataType> lapse{t.size()};
+  get(lapse) = sqrt(1. - 2. * mass_left / areal_distance_left +
+                    27. * square(square(mass_left)) /
+                        (16. * square(square(areal_distance_left))));
+
+  // Schwarzschild Horizon Penetrating shift
+  tnsr::I<DataType, 3> shift{t.size()};
+  for (size_t i = 0; i < 3; ++i) {
+    shift.get(i) = .75 * sqrt(3) * square(mass_left) * get(distance_left_t) /
+                   pow(areal_distance_left, 3) * normal_left_t.get(i);
+  }
+  // Schwarzschild Horizon Penetrating spatial metric
+  tnsr::ii<DataType, 3> spatial_metric{t.size()};
+  std::fill(spatial_metric.begin(), spatial_metric.end(), 0.);
+  for (size_t i = 0; i < 3; ++i) {
+    for (size_t k = 0; k < areal_distance_left.size(); ++k) {
+      spatial_metric.get(i, i)[k] +=
+          sqrt(4. * areal_distance_left[k] /
+               (2. * areal_distance_left[k] + mass_left +
+                sqrt(4. * square(areal_distance_left[k]) +
+                     4. * areal_distance_left[k] * mass_left +
+                     3. * square(mass_left)))) *
+          std::pow((8. * areal_distance_left[k] + 6. * mass_left +
+                    3. * sqrt(8. * square(areal_distance_left[k]) +
+                              8. * areal_distance_left[k] * mass_left +
+                              6. * square(mass_left))) /
+                       ((4. + 3. * sqrt(2.)) *
+                        (2. * areal_distance_left[k] - 3. * mass_left)),
+                   1. / (2. * sqrt(2.)));
+    }
+  }
+  tnsr::aa<DataType, 3> spacetime_metric{t.size()};
+  gr::spacetime_metric(make_not_null(&spacetime_metric), lapse, shift,
+                       spatial_metric);
+
+  tnsr::I<DataType, 3, Frame::NoFrame> boost_velocity{t.size()};
+  for (size_t i = 0; i < 3; ++i) {
+    boost_velocity.get(i) = momentum_left_t.get(i) / mass_left;
+  }
+  // tnsr::Ab<double, 3, Frame::NoFrame> boost_matrix_aux =
+  //     sr::lorentz_boost_matrix<3>(boost_velocity);
+  const DataType velocity_squared{
+      get(dot_product(boost_velocity, boost_velocity))};
+  const DataType lorentz_factor{1.0 / sqrt(1.0 - velocity_squared)};
+  DataType kinetic_energy_per_v_squared{square(lorentz_factor) /
+                                        (1.0 + lorentz_factor)};
+  tnsr::Ab<DataType, 3> boost_matrix{t.size()};
+  boost_matrix.get(0, 0) = lorentz_factor;
+  for (size_t i = 0; i < 3; ++i) {
+    boost_matrix.get(0, i + 1) = boost_velocity.get(i) * lorentz_factor;
+    boost_matrix.get(i + 1, 0) = boost_velocity.get(i) * lorentz_factor;
+    for (size_t j = 0; j < 3; ++j) {
+      boost_matrix.get(i + 1, j + 1) = boost_velocity.get(i) *
+                                       boost_velocity.get(j) *
+                                       kinetic_energy_per_v_squared;
+    }
+    boost_matrix.get(i + 1, i + 1) += 1.0;
+  }
+
+  tnsr::aa<DataType, 3> boosted_spacetime_metric{t.size()};
+  for (size_t i = 0; i < 4; ++i) {
+    for (size_t j = 0; j <= i; ++j) {
+      boosted_spacetime_metric.get(i, j) = 0.;
+      for (size_t k = 0; k < 4; ++k) {
+        for (size_t l = 0; l < 4; ++l) {
+          boosted_spacetime_metric.get(i, j) += boost_matrix.get(k, i) *
+                                                boost_matrix.get(l, j) *
+                                                spacetime_metric.get(k, l);
+        }
+      }
+    }
+  }
+
+  return boosted_spacetime_metric;
+}
+
+template <typename DataType>
+tnsr::aa<DataType, 3> BinaryWithGravitationalWavesVariables<
+    DataType>::get_t_boosted_spacetime_metric_right(DataType t) const {
+  const auto distance_right_t = get_t_distance_right(t);
+  const auto areal_distance_right =
+      find_areal_distance_right(get(distance_right_t));
+  const auto momentum_right_t = get_t_momentum_right(t);
+  const auto normal_right_t = get_t_normal_right(t);
+
+  // Schwarzschild Horizon Penetrating lapse
+  Scalar<DataType> lapse{t.size()};
+  get(lapse) = sqrt(1. - 2. * mass_right / areal_distance_right +
+                    27. * square(square(mass_right)) /
+                        (16. * square(square(areal_distance_right))));
+
+  // Schwarzschild Horizon Penetrating shift
+  tnsr::I<DataType, 3> shift{t.size()};
+  for (size_t i = 0; i < 3; ++i) {
+    shift.get(i) = .75 * sqrt(3) * square(mass_right) * get(distance_right_t) /
+                   pow(areal_distance_right, 3) * normal_right_t.get(i);
+  }
+  // Schwarzschild Horizon Penetrating spatial metric
+  tnsr::ii<DataType, 3> spatial_metric{t.size()};
+  std::fill(spatial_metric.begin(), spatial_metric.end(), 0.);
+  for (size_t i = 0; i < 3; ++i) {
+    for (size_t k = 0; k < areal_distance_right.size(); ++k) {
+      spatial_metric.get(i, i)[k] +=
+          sqrt(4. * areal_distance_right[k] /
+               (2. * areal_distance_right[k] + mass_right +
+                sqrt(4. * square(areal_distance_right[k]) +
+                     4. * areal_distance_right[k] * mass_right +
+                     3. * square(mass_right)))) *
+          std::pow((8. * areal_distance_right[k] + 6. * mass_right +
+                    3. * sqrt(8. * square(areal_distance_right[k]) +
+                              8. * areal_distance_right[k] * mass_right +
+                              6. * square(mass_right))) /
+                       ((4. + 3. * sqrt(2.)) *
+                        (2. * areal_distance_right[k] - 3. * mass_right)),
+                   1. / (2. * sqrt(2.)));
+    }
+  }
+  tnsr::aa<DataType, 3> spacetime_metric{t.size()};
+  gr::spacetime_metric(make_not_null(&spacetime_metric), lapse, shift,
+                       spatial_metric);
+
+  tnsr::I<DataType, 3, Frame::NoFrame> boost_velocity{t.size()};
+  for (size_t i = 0; i < 3; ++i) {
+    boost_velocity.get(i) = momentum_right_t.get(i) / mass_right;
+  }
+  // tnsr::Ab<double, 3, Frame::NoFrame> boost_matrix_aux =
+  //     sr::lorentz_boost_matrix<3>(boost_velocity);
+  const DataType velocity_squared{
+      get(dot_product(boost_velocity, boost_velocity))};
+  const DataType lorentz_factor{1.0 / sqrt(1.0 - velocity_squared)};
+  DataType kinetic_energy_per_v_squared{square(lorentz_factor) /
+                                        (1.0 + lorentz_factor)};
+  tnsr::Ab<DataType, 3> boost_matrix{t.size()};
+  boost_matrix.get(0, 0) = lorentz_factor;
+  for (size_t i = 0; i < 3; ++i) {
+    boost_matrix.get(0, i + 1) = boost_velocity.get(i) * lorentz_factor;
+    boost_matrix.get(i + 1, 0) = boost_velocity.get(i) * lorentz_factor;
+    for (size_t j = 0; j < 3; ++j) {
+      boost_matrix.get(i + 1, j + 1) = boost_velocity.get(i) *
+                                       boost_velocity.get(j) *
+                                       kinetic_energy_per_v_squared;
+    }
+    boost_matrix.get(i + 1, i + 1) += 1.0;
+  }
+
+  tnsr::aa<DataType, 3> boosted_spacetime_metric{t.size()};
+  for (size_t i = 0; i < 4; ++i) {
+    for (size_t j = 0; j <= i; ++j) {
+      boosted_spacetime_metric.get(i, j) = 0.;
+      for (size_t k = 0; k < 4; ++k) {
+        for (size_t l = 0; l < 4; ++l) {
+          boosted_spacetime_metric.get(i, j) += boost_matrix.get(k, i) *
+                                                boost_matrix.get(l, j) *
+                                                spacetime_metric.get(k, l);
+        }
+      }
+    }
+  }
+
+  return boosted_spacetime_metric;
+}
+
+template <typename DataType>
+tnsr::aa<DataType, 3> BinaryWithGravitationalWavesVariables<
+    DataType>::get_t_superposed_spacetime_metric(DataType t) const {
+  const auto spacetime_metric_left = get_t_boosted_spacetime_metric_left(t);
+  const auto spacetime_metric_right = get_t_boosted_spacetime_metric_right(t);
+  tnsr::aa<DataType, 3> superposed_spacetime_metric{t.size()};
+  for (size_t i = 0; i < 4; ++i) {
+    for (size_t j = 0; j <= i; ++j) {
+      superposed_spacetime_metric.get(i, j) =
+          spacetime_metric_left.get(i, j) + spacetime_metric_right.get(i, j);
+    }
+    superposed_spacetime_metric.get(i, i) -= 1.;
+  }
+  superposed_spacetime_metric.get(0, 0) += 2.;
+  return superposed_spacetime_metric;
 }
 
 template class BinaryWithGravitationalWavesVariables<DataVector>;
