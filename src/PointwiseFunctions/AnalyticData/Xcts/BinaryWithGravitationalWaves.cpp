@@ -1797,7 +1797,7 @@ BinaryWithGravitationalWavesVariables<DataType>::get_t_boosted_distance_left(
   const auto momentum_left_t = get_t_momentum_left(t);
   tnsr::I<DataType, 3, Frame::NoFrame> boost_velocity{t.size()};
   for (size_t i = 0; i < 3; ++i) {
-    boost_velocity.get(i) = -momentum_left_t.get(i) / mass_left;
+    boost_velocity.get(i) = momentum_left_t.get(i) / mass_left;
   }
   const DataType velocity_squared{
       get(dot_product(boost_velocity, boost_velocity))};
@@ -1845,7 +1845,7 @@ BinaryWithGravitationalWavesVariables<DataType>::get_t_boosted_distance_right(
   const auto momentum_right_t = get_t_momentum_right(t);
   tnsr::I<DataType, 3, Frame::NoFrame> boost_velocity{t.size()};
   for (size_t i = 0; i < 3; ++i) {
-    boost_velocity.get(i) = -momentum_right_t.get(i) / mass_right;
+    boost_velocity.get(i) = momentum_right_t.get(i) / mass_right;
   }
   const DataType velocity_squared{
       get(dot_product(boost_velocity, boost_velocity))};
@@ -1893,7 +1893,7 @@ BinaryWithGravitationalWavesVariables<DataType>::get_t_boosted_normal_left(
   const auto momentum_left_t = get_t_momentum_left(t);
   tnsr::I<DataType, 3, Frame::NoFrame> boost_velocity{t.size()};
   for (size_t i = 0; i < 3; ++i) {
-    boost_velocity.get(i) = -momentum_left_t.get(i) / mass_left;
+    boost_velocity.get(i) = momentum_left_t.get(i) / mass_left;
   }
   const DataType velocity_squared{
       get(dot_product(boost_velocity, boost_velocity))};
@@ -1943,7 +1943,7 @@ BinaryWithGravitationalWavesVariables<DataType>::get_t_boosted_normal_right(
   const auto momentum_right_t = get_t_momentum_right(t);
   tnsr::I<DataType, 3, Frame::NoFrame> boost_velocity{t.size()};
   for (size_t i = 0; i < 3; ++i) {
-    boost_velocity.get(i) = -momentum_right_t.get(i) / mass_right;
+    boost_velocity.get(i) = momentum_right_t.get(i) / mass_right;
   }
   const DataType velocity_squared{
       get(dot_product(boost_velocity, boost_velocity))};
@@ -2024,7 +2024,7 @@ tnsr::aa<DataType, 3> BinaryWithGravitationalWavesVariables<
 
   tnsr::I<DataType, 3, Frame::NoFrame> boost_velocity{t.size()};
   for (size_t i = 0; i < 3; ++i) {
-    boost_velocity.get(i) = -momentum_left_t.get(i) / mass_left;
+    boost_velocity.get(i) = momentum_left_t.get(i) / mass_left;
   }
   const DataType velocity_squared{
       get(dot_product(boost_velocity, boost_velocity))};
@@ -2109,7 +2109,7 @@ tnsr::aa<DataType, 3> BinaryWithGravitationalWavesVariables<
 
   tnsr::I<DataType, 3, Frame::NoFrame> boost_velocity{t.size()};
   for (size_t i = 0; i < 3; ++i) {
-    boost_velocity.get(i) = -momentum_right_t.get(i) / mass_right;
+    boost_velocity.get(i) = momentum_right_t.get(i) / mass_right;
   }
   const DataType velocity_squared{
       get(dot_product(boost_velocity, boost_velocity))};
