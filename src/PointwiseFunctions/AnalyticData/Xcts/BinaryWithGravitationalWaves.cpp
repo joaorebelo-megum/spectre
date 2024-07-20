@@ -463,11 +463,13 @@ void BinaryWithGravitationalWavesVariables<DataType>::operator()(
   gr::shift(shift_background, superposed_spacetime_metric,
   inv_conformal_metric);
   */
+  /*
   DataType present_time(get_size(get<0>(x)), max_time_interpolator);
   const auto& shift_background_aux = get_t_shift(present_time);
   for (size_t i = 0; i < 3; ++i) {
     shift_background->get(i) = shift_background_aux.get(i);
   }
+  */
 }
 
 template <typename DataType>
@@ -499,32 +501,29 @@ void BinaryWithGravitationalWavesVariables<DataType>::operator()(
 
   const auto& conformal_metric = cache->get_var(
       *this, Xcts::Tags::ConformalMetric<DataType, Dim, Frame::Inertial>{});
-  DataType present_time(get_size(get<0>(x)), max_time_interpolator);
   double time_displacement = 0.1;
   DataType time_back(get_size(x.get(0)), -time_displacement);
   const auto conformal_metric_back = get_t_conformal_metric(time_back);
-  // const auto inv_conformal_metric_back =
-  //     determinant_and_inverse(conformal_metric_back).second;
 
-  // Time factor
-  /*
-  const auto momentum_left_t = get_t_momentum_left(present_time);
-  tnsr::I<DataType, 3, Frame::NoFrame> boost_velocity{present_time.size()};
+  tnsr::ii<DataType, 3> dt_conformal_metric{get_size(x.get(0))};
   for (size_t i = 0; i < 3; ++i) {
-    boost_velocity.get(i) = -momentum_left_t.get(i) / mass_left;
+    for (size_t j = 0; j <= i; ++j) {
+      dt_conformal_metric.get(i, j) =
+          (conformal_metric.get(i, j) - conformal_metric_back.get(i, j)) /
+          time_displacement;
+    }
   }
-  const DataType velocity_squared{
-      get(dot_product(boost_velocity, boost_velocity))};
-  const DataType lorentz_factor{1.0 / sqrt(1.0 - velocity_squared)};
-  */
+
   for (size_t i = 0; i < 3; ++i) {
     for (size_t j = 0; j <= i; ++j) {
       for (size_t k = 0; k < 3; ++k) {
         for (size_t l = 0; l < 3; ++l) {
           longitudinal_shift_background_minus_dt_conformal_metric->get(i, j) -=
               inv_conformal_metric.get(i, k) * inv_conformal_metric.get(j, l) *
-              (conformal_metric.get(k, l) - conformal_metric_back.get(k, l)) /
-              time_displacement;
+              (dt_conformal_metric.get(k, l) -
+               (1. / 3.) *
+                   get(trace(dt_conformal_metric, inv_conformal_metric)) *
+                   conformal_metric.get(k, l));
         }
       }
     }
@@ -610,11 +609,11 @@ void BinaryWithGravitationalWavesVariables<DataType>::operator()(
     const gsl::not_null<Cache*> /*cache*/,
     Xcts::Tags::ShiftExcess<DataType, Dim, Frame::Inertial> /*meta*/) const {
   std::fill(shift_excess->begin(), shift_excess->end(), 0.);
-  /*DataType present_time(get_size(get<0>(x)), max_time_interpolator);
+  DataType present_time(get_size(get<0>(x)), max_time_interpolator);
   const auto shift_excess_aux = get_t_shift(present_time);
   for (size_t i = 0; i < 3; ++i) {
     shift_excess->get(i) += shift_excess_aux.get(i);
-  }*/
+  }
 }
 
 template <typename DataType>
@@ -1202,17 +1201,6 @@ Scalar<DataType> BinaryWithGravitationalWavesVariables<
   const auto conformal_metric_back = get_t_conformal_metric(time_back);
   const auto lapse = get_t_lapse(t);
 
-  // Time factor
-  /*
-  const auto momentum_left_t = get_t_momentum_left(t);
-  tnsr::I<DataType, 3, Frame::NoFrame> boost_velocity{t.size()};
-  for (size_t i = 0; i < 3; ++i) {
-    boost_velocity.get(i) = -momentum_left_t.get(i) / mass_left;
-  }
-  const DataType velocity_squared{
-      get(dot_product(boost_velocity, boost_velocity))};
-  const DataType lorentz_factor{1.0 / sqrt(1.0 - velocity_squared)};
-  */
   for (size_t i = 0; i < 3; ++i) {
     for (size_t j = 0; j <= i; ++j) {
       extrinsic_curvature.get(i, j) +=
@@ -1800,7 +1788,8 @@ BinaryWithGravitationalWavesVariables<DataType>::get_t_boosted_distance_left(
   tnsr::I<DataType, 3> v_boosted = x;
   for (size_t i = 0; i < t.size(); ++i) {
     for (size_t j = 0; j < 3; ++j) {
-      v_boosted.get(j)[i] -= interpolation_position_left.at(j)(t[i]);
+      v_boosted.get(j)[i] -=
+          interpolation_position_left.at(j)(max_time_interpolator);
     }
   }
 
@@ -1847,7 +1836,8 @@ BinaryWithGravitationalWavesVariables<DataType>::get_t_boosted_distance_right(
   tnsr::I<DataType, 3> v_boosted = x;
   for (size_t i = 0; i < t.size(); ++i) {
     for (size_t j = 0; j < 3; ++j) {
-      v_boosted.get(j)[i] -= interpolation_position_right.at(j)(t[i]);
+      v_boosted.get(j)[i] -=
+          interpolation_position_right.at(j)(max_time_interpolator);
     }
   }
 
@@ -1894,7 +1884,8 @@ BinaryWithGravitationalWavesVariables<DataType>::get_t_boosted_normal_left(
   tnsr::I<DataType, 3> v_boosted = x;
   for (size_t i = 0; i < t.size(); ++i) {
     for (size_t j = 0; j < 3; ++j) {
-      v_boosted.get(j)[i] -= interpolation_position_left.at(j)(t[i]);
+      v_boosted.get(j)[i] -=
+          interpolation_position_left.at(j)(max_time_interpolator);
     }
   }
 
@@ -1943,7 +1934,8 @@ BinaryWithGravitationalWavesVariables<DataType>::get_t_boosted_normal_right(
   tnsr::I<DataType, 3> v_boosted = x;
   for (size_t i = 0; i < t.size(); ++i) {
     for (size_t j = 0; j < 3; ++j) {
-      v_boosted.get(j)[i] -= interpolation_position_right.at(j)(t[i]);
+      v_boosted.get(j)[i] -=
+          interpolation_position_right.at(j)(max_time_interpolator);
     }
   }
 
