@@ -341,23 +341,16 @@ void BinaryWithGravitationalWavesVariables<DataType>::operator()(
       cache->get_var(*this, gr::Tags::TraceExtrinsicCurvature<DataType>{});
   double time_displacement = 0.1;
   DataType time_back(get(trace_extrinsic_curvature).size(), -time_displacement);
-  /*
-  DataType present_time(get_size(get<0>(x)), max_time_interpolator);
-  const auto distance_left = get_t_distance_left(present_time);
-  const auto distance_right = get_t_distance_right(present_time);
-  const auto areal_distance_left = find_areal_distance_left(get(distance_left));
-  const auto areal_distance_right =
-      find_areal_distance_right(get(distance_right));
-  const auto normal_left = get_t_normal_left(present_time);
-  const auto normal_right = get_t_normal_right(present_time);
-  const auto momentum_left = get_t_momentum_left(present_time);
-  const auto momentum_right = get_t_momentum_right(present_time);
-  */
+  DataType time_back_two(get(trace_extrinsic_curvature).size(),
+                         -2. * time_displacement);
   Scalar<DataType> trace_extrinsic_curvature_back;
+  Scalar<DataType> trace_extrinsic_curvature_back_two;
   ASSERT(mesh.has_value() and inv_jacobian.has_value(),
          "Need a mesh and a Jacobian for numeric differentiation.");
   if constexpr (std::is_same_v<DataType, DataVector>) {
     trace_extrinsic_curvature_back = get_t_trace_extrinsic_curvature(time_back);
+    trace_extrinsic_curvature_back_two =
+        get_t_trace_extrinsic_curvature(time_back_two);
   } else {
     (void)dt_trace_extrinsic_curvature;
     (void)cache;
@@ -367,22 +360,10 @@ void BinaryWithGravitationalWavesVariables<DataType>::operator()(
   }
 
   get(*dt_trace_extrinsic_curvature) =
-      /*square(
-          1. +
-          .75 * sqrt(3) * square(mass_left) * normal_left.get(1) *
-              (momentum_left.get(1) / mass_left) /
-              ((1. - 2. * mass_left / areal_distance_left) *
-               sqrt(square(areal_distance_left) * square(areal_distance_left) -
-                    2. * mass_left * cube(areal_distance_left) + 1.6875)) +
-          .75 * sqrt(3) * square(mass_right) * normal_right.get(1) *
-              (momentum_right.get(1) / mass_right) /
-              ((1. - 2. * mass_right / areal_distance_right) *
-               sqrt(square(areal_distance_right) *
-                        square(areal_distance_right) -
-                    2. * mass_right * cube(areal_distance_right) + 1.6875))) *
-       */
-      (get(trace_extrinsic_curvature) - get(trace_extrinsic_curvature_back)) /
-      time_displacement;
+      (3. * get(trace_extrinsic_curvature) -
+       4. * get(trace_extrinsic_curvature_back) +
+       get(trace_extrinsic_curvature_back_two)) /
+      (2. * time_displacement);
 }
 
 template <typename DataType>
@@ -497,20 +478,23 @@ void BinaryWithGravitationalWavesVariables<DataType>::operator()(
       shift_background,
       deriv_shift_background, inv_conformal_metric,
       conformal_christoffel_second_kind);
-  // DtConformalMetric (finite difference 1st order)
+  // DtConformalMetric (finite difference 2nd order)
 
   const auto& conformal_metric = cache->get_var(
       *this, Xcts::Tags::ConformalMetric<DataType, Dim, Frame::Inertial>{});
   double time_displacement = 0.1;
   DataType time_back(get_size(x.get(0)), -time_displacement);
+  DataType time_back_two(get_size(x.get(0)), -2. * time_displacement);
   const auto conformal_metric_back = get_t_conformal_metric(time_back);
+  const auto conformal_metric_back_two = get_t_conformal_metric(time_back_two);
 
   tnsr::ii<DataType, 3> dt_conformal_metric{get_size(x.get(0))};
   for (size_t i = 0; i < 3; ++i) {
     for (size_t j = 0; j <= i; ++j) {
-      dt_conformal_metric.get(i, j) =
-          (conformal_metric.get(i, j) - conformal_metric_back.get(i, j)) /
-          time_displacement;
+      dt_conformal_metric.get(i, j) = (3. * conformal_metric.get(i, j) -
+                                       4. * conformal_metric_back.get(i, j) +
+                                       conformal_metric_back_two.get(i, j)) /
+                                      (2. * time_displacement);
     }
   }
 
@@ -1195,17 +1179,21 @@ Scalar<DataType> BinaryWithGravitationalWavesVariables<
 
   double time_displacement = 0.1;
   DataType time_back(get_size(x.get(0)), t[0] - time_displacement);
+  DataType time_back_two(get_size(x.get(0)), t[0] - 2. * time_displacement);
   const auto conformal_metric = get_t_conformal_metric(t);
   const auto inv_conformal_metric =
       determinant_and_inverse(conformal_metric).second;
   const auto conformal_metric_back = get_t_conformal_metric(time_back);
+  const auto conformal_metric_back_two = get_t_conformal_metric(time_back_two);
   const auto lapse = get_t_lapse(t);
 
   for (size_t i = 0; i < 3; ++i) {
     for (size_t j = 0; j <= i; ++j) {
       extrinsic_curvature.get(i, j) +=
-          (conformal_metric.get(i, j) - conformal_metric_back.get(i, j)) /
-          (time_displacement * (-2.) * get(lapse));
+          (3. * conformal_metric.get(i, j) -
+           4. * conformal_metric_back.get(i, j) +
+           conformal_metric_back_two.get(i, j)) /
+          (2. * time_displacement * (-2.) * get(lapse));
     }
   }
 
@@ -1797,7 +1785,7 @@ BinaryWithGravitationalWavesVariables<DataType>::get_t_boosted_distance_left(
   const auto momentum_left_t = get_t_momentum_left(t);
   tnsr::I<DataType, 3, Frame::NoFrame> boost_velocity{t.size()};
   for (size_t i = 0; i < 3; ++i) {
-    boost_velocity.get(i) = momentum_left_t.get(i) / mass_left;
+    boost_velocity.get(i) = -momentum_left_t.get(i) / mass_left;
   }
   const DataType velocity_squared{
       get(dot_product(boost_velocity, boost_velocity))};
@@ -1845,7 +1833,7 @@ BinaryWithGravitationalWavesVariables<DataType>::get_t_boosted_distance_right(
   const auto momentum_right_t = get_t_momentum_right(t);
   tnsr::I<DataType, 3, Frame::NoFrame> boost_velocity{t.size()};
   for (size_t i = 0; i < 3; ++i) {
-    boost_velocity.get(i) = momentum_right_t.get(i) / mass_right;
+    boost_velocity.get(i) = -momentum_right_t.get(i) / mass_right;
   }
   const DataType velocity_squared{
       get(dot_product(boost_velocity, boost_velocity))};
@@ -1893,7 +1881,7 @@ BinaryWithGravitationalWavesVariables<DataType>::get_t_boosted_normal_left(
   const auto momentum_left_t = get_t_momentum_left(t);
   tnsr::I<DataType, 3, Frame::NoFrame> boost_velocity{t.size()};
   for (size_t i = 0; i < 3; ++i) {
-    boost_velocity.get(i) = momentum_left_t.get(i) / mass_left;
+    boost_velocity.get(i) = -momentum_left_t.get(i) / mass_left;
   }
   const DataType velocity_squared{
       get(dot_product(boost_velocity, boost_velocity))};
@@ -1943,7 +1931,7 @@ BinaryWithGravitationalWavesVariables<DataType>::get_t_boosted_normal_right(
   const auto momentum_right_t = get_t_momentum_right(t);
   tnsr::I<DataType, 3, Frame::NoFrame> boost_velocity{t.size()};
   for (size_t i = 0; i < 3; ++i) {
-    boost_velocity.get(i) = momentum_right_t.get(i) / mass_right;
+    boost_velocity.get(i) = -momentum_right_t.get(i) / mass_right;
   }
   const DataType velocity_squared{
       get(dot_product(boost_velocity, boost_velocity))};
@@ -2024,7 +2012,7 @@ tnsr::aa<DataType, 3> BinaryWithGravitationalWavesVariables<
 
   tnsr::I<DataType, 3, Frame::NoFrame> boost_velocity{t.size()};
   for (size_t i = 0; i < 3; ++i) {
-    boost_velocity.get(i) = momentum_left_t.get(i) / mass_left;
+    boost_velocity.get(i) = -momentum_left_t.get(i) / mass_left;
   }
   const DataType velocity_squared{
       get(dot_product(boost_velocity, boost_velocity))};
@@ -2109,7 +2097,7 @@ tnsr::aa<DataType, 3> BinaryWithGravitationalWavesVariables<
 
   tnsr::I<DataType, 3, Frame::NoFrame> boost_velocity{t.size()};
   for (size_t i = 0; i < 3; ++i) {
-    boost_velocity.get(i) = momentum_right_t.get(i) / mass_right;
+    boost_velocity.get(i) = -momentum_right_t.get(i) / mass_right;
   }
   const DataType velocity_squared{
       get(dot_product(boost_velocity, boost_velocity))};
