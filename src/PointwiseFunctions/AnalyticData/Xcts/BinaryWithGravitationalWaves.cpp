@@ -602,6 +602,75 @@ void BinaryWithGravitationalWavesVariables<DataType>::operator()(
 
 template <typename DataType>
 void BinaryWithGravitationalWavesVariables<DataType>::operator()(
+    gsl::not_null<tnsr::i<DataType, Dim>*> deriv_conformal_factor_minus_one,
+    gsl::not_null<Cache*> cache,
+    ::Tags::deriv<Xcts::Tags::ConformalFactorMinusOne<DataType>,
+                  tmpl::size_t<Dim>, Frame::Inertial> /*meta*/) const {
+  ASSERT(mesh.has_value() and inv_jacobian.has_value(),
+         "Need a mesh and a Jacobian for numeric differentiation.");
+  if constexpr (std::is_same_v<DataType, DataVector>) {
+    const auto& conformal_factor_minus_one =
+        cache->get_var(*this, Xcts::Tags::ConformalFactorMinusOne<DataType>{});
+    partial_derivative(deriv_conformal_factor_minus_one,
+                       conformal_factor_minus_one, mesh->get(),
+                       inv_jacobian->get());
+  } else {
+    (void)deriv_conformal_factor_minus_one;
+    (void)cache;
+    ERROR(
+        "Numeric differentiation only works with DataVectors because it needs "
+        "a grid.");
+  }
+}
+
+template <typename DataType>
+void BinaryWithGravitationalWavesVariables<DataType>::operator()(
+    gsl::not_null<tnsr::i<DataType, Dim>*>
+        deriv_lapse_times_conformal_factor_minus_one,
+    gsl::not_null<Cache*> cache,
+    ::Tags::deriv<Xcts::Tags::LapseTimesConformalFactorMinusOne<DataType>,
+                  tmpl::size_t<Dim>, Frame::Inertial> /*meta*/) const {
+  ASSERT(mesh.has_value() and inv_jacobian.has_value(),
+         "Need a mesh and a Jacobian for numeric differentiation.");
+  if constexpr (std::is_same_v<DataType, DataVector>) {
+    const auto& lapse_times_conformal_factor_minus_one = cache->get_var(
+        *this, Xcts::Tags::LapseTimesConformalFactorMinusOne<DataType>{});
+    partial_derivative(deriv_lapse_times_conformal_factor_minus_one,
+                       lapse_times_conformal_factor_minus_one, mesh->get(),
+                       inv_jacobian->get());
+  } else {
+    (void)deriv_lapse_times_conformal_factor_minus_one;
+    (void)cache;
+    ERROR(
+        "Numeric differentiation only works with DataVectors because it needs "
+        "a grid.");
+  }
+}
+
+template <typename DataType>
+void BinaryWithGravitationalWavesVariables<DataType>::operator()(
+    gsl::not_null<tnsr::iJ<DataType, Dim>*> deriv_shift_excess,
+    gsl::not_null<Cache*> cache,
+    ::Tags::deriv<Xcts::Tags::ShiftExcess<DataType, Dim, Frame::Inertial>,
+                  tmpl::size_t<Dim>, Frame::Inertial> /*meta*/) const {
+  ASSERT(mesh.has_value() and inv_jacobian.has_value(),
+         "Need a mesh and a Jacobian for numeric differentiation.");
+  if constexpr (std::is_same_v<DataType, DataVector>) {
+    const auto& shift_excess = cache->get_var(
+        *this, Xcts::Tags::ShiftExcess<DataType, Dim, Frame::Inertial>{});
+    partial_derivative(deriv_shift_excess, shift_excess, mesh->get(),
+                       inv_jacobian->get());
+  } else {
+    (void)deriv_shift_excess;
+    (void)cache;
+    ERROR(
+        "Numeric differentiation only works with DataVectors because it needs "
+        "a grid.");
+  }
+}
+
+template <typename DataType>
+void BinaryWithGravitationalWavesVariables<DataType>::operator()(
     const gsl::not_null<Scalar<DataType>*> rest_mass_density,
     const gsl::not_null<Cache*> /*cache*/,
     hydro::Tags::RestMassDensity<DataType> /*meta*/) const {
@@ -2149,6 +2218,7 @@ tnsr::aa<DataType, 3> BinaryWithGravitationalWavesVariables<
   }
 
   // Lapse correction
+  /*
   const auto spatial_metric_left = gr::spatial_metric(spacetime_metric_left);
   const auto inv_spatial_metric_left =
       determinant_and_inverse(spatial_metric_left).second;
@@ -2163,10 +2233,11 @@ tnsr::aa<DataType, 3> BinaryWithGravitationalWavesVariables<
       gr::shift(spacetime_metric_right, inv_spatial_metric_right);
   const auto shift_right_down =
       raise_or_lower_index(shift_right, spatial_metric_right);
-
+  */
   superposed_spacetime_metric.get(0, 0) +=
-      2. + get(dot_product(shift_left, shift_right_down)) +
-      get(dot_product(shift_right, shift_left_down));
+      2.;  // +
+           // get(dot_product(shift_left, shift_right_down)) +
+           // get(dot_product(shift_right, shift_left_down));
 
   return superposed_spacetime_metric;
 }
