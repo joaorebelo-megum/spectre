@@ -9,10 +9,9 @@ spectre_target_sources(
   ${LIBRARY}
   PRIVATE
   ApparentHorizon.cpp
-  ApparentHorizonForBwGW.cpp
   Flatness.cpp
-  Robin.cpp
   InnerForBwGW.cpp
+  Robin.cpp
   )
 
 spectre_target_headers(
@@ -20,11 +19,10 @@ spectre_target_headers(
   INCLUDE_DIRECTORY ${CMAKE_SOURCE_DIR}/src
   HEADERS
   ApparentHorizon.hpp
-  ApparentHorizonForBwGW.hpp
   Factory.hpp
   Flatness.hpp
+  InnerForBwGW.cpp
   Robin.hpp
-  InnerForBwGW.hpp
   )
 
 target_link_libraries(

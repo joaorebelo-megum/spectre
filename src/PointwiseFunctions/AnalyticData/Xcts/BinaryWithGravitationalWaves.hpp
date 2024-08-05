@@ -153,7 +153,15 @@ using BinaryWithGravitationalWavesVariablesCache =
             // For initial guesses
             Xcts::Tags::ConformalFactorMinusOne<DataType>,
             Xcts::Tags::LapseTimesConformalFactorMinusOne<DataType>,
-            Xcts::Tags::ShiftExcess<DataType, 3, Frame::Inertial>>,
+            Xcts::Tags::ShiftExcess<DataType, 3, Frame::Inertial>,
+            // For boundary conditions
+            ::Tags::deriv<Xcts::Tags::ConformalFactorMinusOne<DataType>,
+                          tmpl::size_t<3>, Frame::Inertial>,
+            ::Tags::deriv<
+                Xcts::Tags::LapseTimesConformalFactorMinusOne<DataType>,
+                tmpl::size_t<3>, Frame::Inertial>,
+            ::Tags::deriv<Xcts::Tags::ShiftExcess<DataType, 3, Frame::Inertial>,
+                          tmpl::size_t<3>, Frame::Inertial>>,
         hydro_tags<DataType>>>;
 
 template <typename DataType>
@@ -366,6 +374,22 @@ struct BinaryWithGravitationalWavesVariables
       gsl::not_null<tnsr::I<DataType, Dim>*> shift_excess,
       gsl::not_null<Cache*> /*cache*/,
       Xcts::Tags::ShiftExcess<DataType, Dim, Frame::Inertial> /*meta*/) const;
+  void operator()(
+      gsl::not_null<tnsr::i<DataType, Dim>*> deriv_conformal_factor_minus_one,
+      gsl::not_null<Cache*> cache,
+      ::Tags::deriv<Xcts::Tags::ConformalFactorMinusOne<DataType>,
+                    tmpl::size_t<Dim>, Frame::Inertial> /*meta*/) const;
+  void operator()(
+      gsl::not_null<tnsr::i<DataType, Dim>*>
+          deriv_lapse_times_conformal_factor_minus_one,
+      gsl::not_null<Cache*> cache,
+      ::Tags::deriv<Xcts::Tags::LapseTimesConformalFactorMinusOne<DataType>,
+                    tmpl::size_t<Dim>, Frame::Inertial> /*meta*/) const;
+  void operator()(
+      gsl::not_null<tnsr::iJ<DataType, Dim>*> deriv_shift_excess,
+      gsl::not_null<Cache*> cache,
+      ::Tags::deriv<Xcts::Tags::ShiftExcess<DataType, Dim, Frame::Inertial>,
+                    tmpl::size_t<Dim>, Frame::Inertial> /*meta*/) const;
   void operator()(gsl::not_null<Scalar<DataType>*> rest_mass_density,
                   gsl::not_null<Cache*> /*cache*/,
                   hydro::Tags::RestMassDensity<DataType> /*meta*/) const;

@@ -75,11 +75,43 @@ void implement_apply_neumann(
         n_dot_lapse_times_conformal_factor_gradient,
     const gsl::not_null<tnsr::I<DataVector, 3>*>
         n_dot_longitudinal_shift_excess,
+    const std::optional<
+        std::unique_ptr<Xcts::AnalyticData::BinaryWithGravitationalWaves>>&
+        solution,
+    const tnsr::I<DataVector, 3>& x,
     const tnsr::i<DataVector, 3>& face_normal) {
+  using analytic_tags = tmpl::list<
+      ::Tags::deriv<Xcts::Tags::ConformalFactorMinusOne<DataVector>,
+                    tmpl::size_t<3>, Frame::Inertial>,
+      ::Tags::deriv<Xcts::Tags::LapseTimesConformalFactorMinusOne<DataVector>,
+                    tmpl::size_t<3>, Frame::Inertial>,
+      ::Tags::deriv<Xcts::Tags::ShiftExcess<DataVector, 3, Frame::Inertial>,
+                    tmpl::size_t<3>, Frame::Inertial>>;
+  const auto solution_vars =
+      variables_from_tagged_tuple((*solution)->variables(x, analytic_tags{}));
+  const auto& deriv_conformal_factor_minus_one =
+      get<::Tags::deriv<Xcts::Tags::ConformalFactorMinusOne<DataVector>,
+                        tmpl::size_t<3>, Frame::Inertial>>(solution_vars);
+  const auto& deriv_lapse_times_conformal_factor_minus_one = get<
+      ::Tags::deriv<Xcts::Tags::LapseTimesConformalFactorMinusOne<DataVector>,
+                    tmpl::size_t<3>, Frame::Inertial>>(solution_vars);
+  const auto& deriv_shift_excess =
+      get<::Tags::deriv<Xcts::Tags::ShiftExcess<DataVector, 3, Frame::Inertial>,
+                        tmpl::size_t<3>, Frame::Inertial>>(solution_vars);
   get(*n_dot_conformal_factor_gradient) = 0.;
   get(*n_dot_lapse_times_conformal_factor_gradient) = 0.;
+  std::fill(n_dot_longitudinal_shift_excess->begin(),
+            n_dot_longitudinal_shift_excess->end(), 0.);
   for (size_t i = 0; i < 3; ++i) {
-    n_dot_longitudinal_shift_excess->get(i) = 0.;
+    get(*n_dot_conformal_factor_gradient) +=
+        face_normal.get(i) * deriv_conformal_factor_minus_one.get(i);
+    get(*n_dot_lapse_times_conformal_factor_gradient) +=
+        face_normal.get(i) *
+        deriv_lapse_times_conformal_factor_minus_one.get(i);
+    for (size_t j = 0; j < 3; ++j) {
+      n_dot_longitudinal_shift_excess->get(i) +=
+          face_normal.get(j) * deriv_shift_excess.get(i, j);
+    }
   }
 }
 
@@ -96,9 +128,10 @@ void InnerForBwGW<ConformalGeometry>::apply(
         n_dot_lapse_times_conformal_factor_gradient,
     const gsl::not_null<tnsr::I<DataVector, 3>*>
         n_dot_longitudinal_shift_excess,
-    const tnsr::i<DataVector, 3>& deriv_conformal_factor_correction,
-    const tnsr::i<DataVector, 3>& deriv_lapse_times_conformal_factor_correction,
-    const tnsr::iJ<DataVector, 3>& deriv_shift_excess_correction,
+    const tnsr::i<DataVector, 3>& /*deriv_conformal_factor_correction1*/,
+    const tnsr::i<DataVector,
+                  3>& /*deriv_lapse_times_conformal_factor_correction1*/,
+    const tnsr::iJ<DataVector, 3>& /*deriv_shift_excess_correction1*/,
     const tnsr::I<DataVector, 3>& x,
     const tnsr::i<DataVector, 3>& face_normal) const {
   if (boundary_ == elliptic::BoundaryConditionType::Dirichlet) {
@@ -109,7 +142,7 @@ void InnerForBwGW<ConformalGeometry>::apply(
     implement_apply_neumann<ConformalGeometry>(
         n_dot_conformal_factor_gradient,
         n_dot_lapse_times_conformal_factor_gradient,
-        n_dot_longitudinal_shift_excess, face_normal);
+        n_dot_longitudinal_shift_excess, solution_, x, face_normal);
   }
 }
 
