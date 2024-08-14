@@ -460,7 +460,10 @@ void BinaryWithGravitationalWavesVariables<DataType>::operator()(
     const gsl::not_null<Cache*> cache,
     Xcts::Tags::LongitudinalShiftBackgroundMinusDtConformalMetric<
         DataType, 3, Frame::Inertial> /*meta*/) const {
+  std::fill(longitudinal_shift_background_minus_dt_conformal_metric->begin(),
+            longitudinal_shift_background_minus_dt_conformal_metric->end(), 0.);
   // LongitudinalShiftBackground
+  /*
   const auto& shift_background = cache->get_var(
       *this, ::Xcts::Tags::ShiftBackground<DataType, Dim, Frame::Inertial>{});
   const auto& deriv_shift_background = cache->get_var(
@@ -478,10 +481,13 @@ void BinaryWithGravitationalWavesVariables<DataType>::operator()(
       shift_background,
       deriv_shift_background, inv_conformal_metric,
       conformal_christoffel_second_kind);
+  */
   // DtConformalMetric (finite difference 2nd order)
-
   const auto& conformal_metric = cache->get_var(
       *this, Xcts::Tags::ConformalMetric<DataType, Dim, Frame::Inertial>{});
+  const auto& inv_conformal_metric = cache->get_var(
+      *this,
+      ::Xcts::Tags::InverseConformalMetric<DataType, Dim, Frame::Inertial>{});
   double time_displacement = 0.1;
   DataType time_back(get_size(x.get(0)), -time_displacement);
   DataType time_back_two(get_size(x.get(0)), -2. * time_displacement);
@@ -520,6 +526,7 @@ void BinaryWithGravitationalWavesVariables<DataType>::operator()(
     gsl::not_null<Cache*> cache,
     ::Tags::deriv<Xcts::Tags::ShiftBackground<DataType, Dim, Frame::Inertial>,
                   tmpl::size_t<Dim>, Frame::Inertial> /*meta*/) const {
+  /*
   ASSERT(mesh.has_value() and inv_jacobian.has_value(),
          "Need a mesh and a Jacobian for numeric differentiation.");
   if constexpr (std::is_same_v<DataType, DataVector>) {
@@ -534,6 +541,8 @@ void BinaryWithGravitationalWavesVariables<DataType>::operator()(
         "Numeric differentiation only works with DataVectors because it needs "
         "a grid.");
   }
+  */
+  std::fill(deriv_shift_background->begin(), deriv_shift_background->end(), 0.);
 }
 
 template <typename DataType>
@@ -2301,8 +2310,8 @@ tnsr::aa<DataType, 3> BinaryWithGravitationalWavesVariables<
   tnsr::aa<DataType, 3> superposed_spacetime_metric{t.size()};
   for (size_t i = 0; i < 4; ++i) {
     for (size_t j = 0; j <= i; ++j) {
-      superposed_spacetime_metric.get(i, j) = spacetime_metric_left.get(
-          i, j) + spacetime_metric_right.get(i, j);
+      superposed_spacetime_metric.get(i, j) =
+          spacetime_metric_left.get(i, j) + spacetime_metric_right.get(i, j);
     }
     superposed_spacetime_metric.get(i, i) -= 1.;
   }

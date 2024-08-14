@@ -33,13 +33,13 @@ class DataVector;
 namespace Xcts::BoundaryConditions {
 
 /*!
- * \brief Impose solution corresponding to the one on
+ * \brief Impose apparent horizon boundary conditions to
  * BinaryWithGravitationalWaves
  *
- * It can be used to impose dirichlet and neumann boundary conditions.
  */
 template <Xcts::Geometry ConformalGeometry>
-class InnerForBwGW : public elliptic::BoundaryConditions::BoundaryCondition<3> {
+class ApparentHorizonForBwGW
+    : public elliptic::BoundaryConditions::BoundaryCondition<3> {
  private:
   using Base = elliptic::BoundaryConditions::BoundaryCondition<3>;
 
@@ -78,56 +78,56 @@ class InnerForBwGW : public elliptic::BoundaryConditions::BoundaryCondition<3> {
         "The radius of the outer boundary of the computational domain.";
     using type = double;
   };
-  struct BoundaryCondition {
-    static constexpr Options::String help = "Boundary Condition Type.";
-    using type = elliptic::BoundaryConditionType;
-  };
-  using options = tmpl::list<MassLeft, MassRight, XCoordsLeft, XCoordsRight,
-                             AttenuationParameter, AttenuationRadius,
-                             OuterRadius, BoundaryCondition>;
+  using options =
+      tmpl::list<MassLeft, MassRight, XCoordsLeft, XCoordsRight,
+                 AttenuationParameter, AttenuationRadius, OuterRadius>;
   static constexpr Options::String help =
       "Impose Schwarzschild isotropic in Inner Boundary.";
 
-  InnerForBwGW() = default;
-  InnerForBwGW(const InnerForBwGW&) = delete;
-  InnerForBwGW& operator=(const InnerForBwGW&) = delete;
-  InnerForBwGW(InnerForBwGW&&) = default;
-  InnerForBwGW& operator=(InnerForBwGW&&) = default;
-  ~InnerForBwGW() = default;
+  ApparentHorizonForBwGW() = default;
+  ApparentHorizonForBwGW(const ApparentHorizonForBwGW&) = delete;
+  ApparentHorizonForBwGW& operator=(const ApparentHorizonForBwGW&) = delete;
+  ApparentHorizonForBwGW(ApparentHorizonForBwGW&&) = default;
+  ApparentHorizonForBwGW& operator=(ApparentHorizonForBwGW&&) = default;
+  ~ApparentHorizonForBwGW() = default;
 
   /// \cond
-  explicit InnerForBwGW(CkMigrateMessage* m) : Base(m) {}
+  explicit ApparentHorizonForBwGW(CkMigrateMessage* m) : Base(m) {}
   using PUP::able::register_constructor;
-  WRAPPED_PUPable_decl_template(InnerForBwGW);
+  WRAPPED_PUPable_decl_template(ApparentHorizonForBwGW);
   /// \endcond
 
   std::unique_ptr<domain::BoundaryConditions::BoundaryCondition> get_clone()
       const override {
-    return std::make_unique<InnerForBwGW>(
+    return std::make_unique<ApparentHorizonForBwGW>(
         mass_left_, mass_right_, xcoord_left_, xcoord_right_,
-        attenuation_parameter_, attenuation_radius_, outer_radius_, boundary_);
+        attenuation_parameter_, attenuation_radius_, outer_radius_);
   }
 
-  InnerForBwGW(double mass_left, double mass_right, double xcoord_left,
-               double xcoord_right, double attenuation_parameter,
-               double attenuation_radius, double outer_radius,
-               elliptic::BoundaryConditionType boundary,
-               const Options::Context& context = {});
+  ApparentHorizonForBwGW(double mass_left, double mass_right,
+                         double xcoord_left, double xcoord_right,
+                         double attenuation_parameter,
+                         double attenuation_radius, double outer_radius,
+                         const Options::Context& context = {});
 
   std::vector<elliptic::BoundaryConditionType> boundary_condition_types()
       const override {
     return {// Conformal factor
-            boundary_,
+            elliptic::BoundaryConditionType::Neumann,
             // Lapse times conformal factor
-            boundary_,
+            elliptic::BoundaryConditionType::Neumann,
             // Shift
-            boundary_, boundary_, boundary_};
+            elliptic::BoundaryConditionType::Dirichlet,
+            elliptic::BoundaryConditionType::Dirichlet,
+            elliptic::BoundaryConditionType::Dirichlet};
   }
 
   using argument_tags =
       tmpl::list<domain::Tags::Coordinates<3, Frame::Inertial>,
-                 ::Tags::Normalized<
-                     domain::Tags::UnnormalizedFaceNormal<3, Frame::Inertial>>>;
+                 domain::Tags::FaceNormal<3>,
+                 ::Tags::deriv<domain::Tags::UnnormalizedFaceNormal<3>,
+                               tmpl::size_t<3>, Frame::Inertial>,
+                 domain::Tags::UnnormalizedFaceNormalMagnitude<3>>;
   using volume_tags = tmpl::list<>;
 
   void apply(
@@ -143,9 +143,16 @@ class InnerForBwGW : public elliptic::BoundaryConditions::BoundaryCondition<3> {
           deriv_lapse_times_conformal_factor_correction,
       const tnsr::iJ<DataVector, 3>& deriv_shift_excess_correction,
       const tnsr::I<DataVector, 3>& x,
-      const tnsr::i<DataVector, 3>& face_normal) const;
+      const tnsr::i<DataVector, 3>& face_normal,
+      const tnsr::ij<DataVector, 3>& deriv_unnormalized_face_normal,
+      const Scalar<DataVector>& face_normal_magnitude) const;
 
-  using argument_tags_linearized = tmpl::list<>;
+  using argument_tags_linearized =
+      tmpl::list<domain::Tags::Coordinates<3, Frame::Inertial>,
+                 domain::Tags::FaceNormal<3>,
+                 ::Tags::deriv<domain::Tags::UnnormalizedFaceNormal<3>,
+                               tmpl::size_t<3>, Frame::Inertial>,
+                 domain::Tags::UnnormalizedFaceNormalMagnitude<3>>;
   using volume_tags_linearized = tmpl::list<>;
 
   void apply_linearized(
@@ -162,7 +169,11 @@ class InnerForBwGW : public elliptic::BoundaryConditions::BoundaryCondition<3> {
       const tnsr::i<DataVector, 3>& deriv_conformal_factor_correction,
       const tnsr::i<DataVector, 3>&
           deriv_lapse_times_conformal_factor_correction,
-      const tnsr::iJ<DataVector, 3>& deriv_shift_excess_correction) const;
+      const tnsr::iJ<DataVector, 3>& deriv_shift_excess_correction,
+      const tnsr::I<DataVector, 3>& x,
+      const tnsr::i<DataVector, 3>& face_normal,
+      const tnsr::ij<DataVector, 3>& deriv_unnormalized_face_normal,
+      const Scalar<DataVector>& face_normal_magnitude) const;
 
   // NOLINTNEXTLINE(google-runtime-references)
   void pup(PUP::er& p) override;
@@ -175,7 +186,6 @@ class InnerForBwGW : public elliptic::BoundaryConditions::BoundaryCondition<3> {
   double attenuation_parameter_{std::numeric_limits<double>::signaling_NaN()};
   double attenuation_radius_{std::numeric_limits<double>::signaling_NaN()};
   double outer_radius_{std::numeric_limits<double>::signaling_NaN()};
-  elliptic::BoundaryConditionType boundary_{};
 
   std::optional<
       std::unique_ptr<Xcts::AnalyticData::BinaryWithGravitationalWaves>>
