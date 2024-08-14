@@ -1766,18 +1766,33 @@ Scalar<DataType> BinaryWithGravitationalWavesVariables<DataType>::get_t_lapse(
   get(lapse_t) = -1. + lapse_left + lapse_right;
   */
   // Boosted superposed Horizon Penetrating Lapse
+  /*
   const auto superposed_spacetime_metric = get_t_superposed_spacetime_metric(t);
   const auto shift = get_t_shift(t);
   gr::lapse(make_not_null(&lapse_t), shift, superposed_spacetime_metric);
-
+  */
+  // Boosted lapse from each boosted solution
+  const auto spacetime_metric_left = get_t_boosted_spacetime_metric_left(t);
+  const auto conformal_metric_left = gr::spatial_metric(spacetime_metric_left);
+  const auto inv_conformal_metric_left =
+      determinant_and_inverse(conformal_metric_left).second;
+  const auto shift_left = gr::shift(spacetime_metric_left, inv_conformal_metric_left);
+  const auto lapse_left = gr::lapse(shift_left, spacetime_metric_left);
+  const auto spacetime_metric_right = get_t_boosted_spacetime_metric_right(t);
+  const auto conformal_metric_right = gr::spatial_metric(spacetime_metric_right);
+  const auto inv_conformal_metric_right =
+      determinant_and_inverse(conformal_metric_right).second;
+  const auto shift_right = gr::shift(spacetime_metric_right, inv_conformal_metric_right);
+  const auto lapse_right = gr::lapse(shift_right, spacetime_metric_right);
+  get(lapse_t) = get(lapse_left) + get(lapse_right) - 1.;
   return lapse_t;
 }
 
 template <typename DataType>
 tnsr::I<DataType, 3>
 BinaryWithGravitationalWavesVariables<DataType>::get_t_shift(DataType t) const {
-  // tnsr::I<DataType, 3> shift_t{t.size()};
-  // std::fill(shift_t.begin(), shift_t.end(), 0.);
+  tnsr::I<DataType, 3> shift_t{t.size()};
+  //std::fill(shift_t.begin(), shift_t.end(), 0.);
 
   // PN shift
   /*
@@ -1830,12 +1845,30 @@ BinaryWithGravitationalWavesVariables<DataType>::get_t_shift(DataType t) const {
         shift_r_left * normal_left.get(i) + shift_r_right * normal_right.get(i);
   }
   */
+  /*
   // Boosted superposed Horizon Penetrating Shift
   const auto superposed_spacetime_metric = get_t_superposed_spacetime_metric(t);
   const auto conformal_metric = get_t_conformal_metric(t);
   const auto inv_conformal_metric =
       determinant_and_inverse(conformal_metric).second;
   return gr::shift(superposed_spacetime_metric, inv_conformal_metric);
+  */
+  // Boosted shifts from each boosted solution
+  const auto spacetime_metric_left = get_t_boosted_spacetime_metric_left(t);
+  const auto conformal_metric_left = gr::spatial_metric(spacetime_metric_left);
+  const auto inv_conformal_metric_left =
+      determinant_and_inverse(conformal_metric_left).second;
+  const auto shift_left = gr::shift(spacetime_metric_left, inv_conformal_metric_left);
+  const auto spacetime_metric_right = get_t_boosted_spacetime_metric_right(t);
+  const auto conformal_metric_right = gr::spatial_metric(spacetime_metric_right);
+  const auto inv_conformal_metric_right =
+      determinant_and_inverse(conformal_metric_right).second;
+  const auto shift_right = gr::shift(spacetime_metric_right, inv_conformal_metric_right);
+  for (size_t i = 0; i < 3; ++i) {
+    shift_t.get(i) =
+        shift_left.get(i) + shift_right.get(i);
+  }
+  return shift_t;
 }
 
 template <typename DataType>
@@ -1855,7 +1888,7 @@ BinaryWithGravitationalWavesVariables<DataType>::get_t_boosted_distance_left(
   const auto momentum_left_t = get_t_momentum_left(t);
   tnsr::I<DataType, 3, Frame::NoFrame> boost_velocity{t.size()};
   for (size_t i = 0; i < 3; ++i) {
-    boost_velocity.get(i) = 0.;  //-momentum_left_t.get(i) / mass_left;
+    boost_velocity.get(i) = -momentum_left_t.get(i) / mass_left;
   }
   const DataType velocity_squared{
       get(dot_product(boost_velocity, boost_velocity))};
@@ -1903,7 +1936,7 @@ BinaryWithGravitationalWavesVariables<DataType>::get_t_boosted_distance_right(
   const auto momentum_right_t = get_t_momentum_right(t);
   tnsr::I<DataType, 3, Frame::NoFrame> boost_velocity{t.size()};
   for (size_t i = 0; i < 3; ++i) {
-    boost_velocity.get(i) = 0.;  //-momentum_right_t.get(i) / mass_right;
+    boost_velocity.get(i) = -momentum_right_t.get(i) / mass_right;
   }
   const DataType velocity_squared{
       get(dot_product(boost_velocity, boost_velocity))};
@@ -1951,7 +1984,7 @@ BinaryWithGravitationalWavesVariables<DataType>::get_t_boosted_normal_left(
   const auto momentum_left_t = get_t_momentum_left(t);
   tnsr::I<DataType, 3, Frame::NoFrame> boost_velocity{t.size()};
   for (size_t i = 0; i < 3; ++i) {
-    boost_velocity.get(i) = 0.;  //-momentum_left_t.get(i) / mass_left;
+    boost_velocity.get(i) = -momentum_left_t.get(i) / mass_left;
   }
   const DataType velocity_squared{
       get(dot_product(boost_velocity, boost_velocity))};
@@ -2001,7 +2034,7 @@ BinaryWithGravitationalWavesVariables<DataType>::get_t_boosted_normal_right(
   const auto momentum_right_t = get_t_momentum_right(t);
   tnsr::I<DataType, 3, Frame::NoFrame> boost_velocity{t.size()};
   for (size_t i = 0; i < 3; ++i) {
-    boost_velocity.get(i) = 0.;  //-momentum_right_t.get(i) / mass_right;
+    boost_velocity.get(i) = -momentum_right_t.get(i) / mass_right;
   }
   const DataType velocity_squared{
       get(dot_product(boost_velocity, boost_velocity))};
@@ -2042,7 +2075,7 @@ tnsr::aa<DataType, 3> BinaryWithGravitationalWavesVariables<
       find_areal_distance_left(get(distance_left_t));
   const auto momentum_left_t = get_t_momentum_left(t);
   const auto normal_left_t = get_t_boosted_normal_left(t);
-  /*
+
   // Schwarzschild Horizon Penetrating lapse
   Scalar<DataType> lapse{t.size()};
   get(lapse) = sqrt(1. - 2. * mass_left / areal_distance_left +
@@ -2076,7 +2109,7 @@ tnsr::aa<DataType, 3> BinaryWithGravitationalWavesVariables<
               4);
     }
   }
-  */
+  /*
   // Schwarzschild Harmonic Coordinates lapse
   Scalar<DataType> lapse{t.size()};
   Scalar<DataType> gamma_rr{t.size()};
@@ -2102,14 +2135,14 @@ tnsr::aa<DataType, 3> BinaryWithGravitationalWavesVariables<
     }
     spatial_metric.get(i, i) += square(1. + mass_left / get(distance_left_t));
   }
-
+  */
   tnsr::aa<DataType, 3> spacetime_metric{t.size()};
   gr::spacetime_metric(make_not_null(&spacetime_metric), lapse, shift,
                        spatial_metric);
 
   tnsr::I<DataType, 3, Frame::NoFrame> boost_velocity{t.size()};
   for (size_t i = 0; i < 3; ++i) {
-    boost_velocity.get(i) = 0.;  //-momentum_left_t.get(i) / mass_left;
+    boost_velocity.get(i) = -momentum_left_t.get(i) / mass_left;
   }
   const DataType velocity_squared{
       get(dot_product(boost_velocity, boost_velocity))};
@@ -2154,7 +2187,7 @@ tnsr::aa<DataType, 3> BinaryWithGravitationalWavesVariables<
       find_areal_distance_right(get(distance_right_t));
   const auto momentum_right_t = get_t_momentum_right(t);
   const auto normal_right_t = get_t_boosted_normal_right(t);
-  /*
+
   // Schwarzschild Horizon Penetrating lapse
   Scalar<DataType> lapse{t.size()};
   get(lapse) = sqrt(1. - 2. * mass_right / areal_distance_right +
@@ -2188,7 +2221,7 @@ tnsr::aa<DataType, 3> BinaryWithGravitationalWavesVariables<
           4);
     }
   }
-  */
+  /*
   // Schwarzschild Harmonic Coordinates lapse
   Scalar<DataType> lapse{t.size()};
   Scalar<DataType> gamma_rr{t.size()};
@@ -2216,14 +2249,14 @@ tnsr::aa<DataType, 3> BinaryWithGravitationalWavesVariables<
     }
     spatial_metric.get(i, i) += square(1. + mass_right / get(distance_right_t));
   }
-
+  */
   tnsr::aa<DataType, 3> spacetime_metric{t.size()};
   gr::spacetime_metric(make_not_null(&spacetime_metric), lapse, shift,
                        spatial_metric);
 
   tnsr::I<DataType, 3, Frame::NoFrame> boost_velocity{t.size()};
   for (size_t i = 0; i < 3; ++i) {
-    boost_velocity.get(i) = 0.;  //-momentum_right_t.get(i) / mass_right;
+    boost_velocity.get(i) = -momentum_right_t.get(i) / mass_right;
   }
   const DataType velocity_squared{
       get(dot_product(boost_velocity, boost_velocity))};
@@ -2269,9 +2302,9 @@ tnsr::aa<DataType, 3> BinaryWithGravitationalWavesVariables<
   for (size_t i = 0; i < 4; ++i) {
     for (size_t j = 0; j <= i; ++j) {
       superposed_spacetime_metric.get(i, j) = spacetime_metric_left.get(
-          i, j);  // + spacetime_metric_right.get(i, j);
+          i, j) + spacetime_metric_right.get(i, j);
     }
-    superposed_spacetime_metric.get(i, i) -= 0.;  // 1.;
+    superposed_spacetime_metric.get(i, i) -= 1.;
   }
 
   // Lapse correction
@@ -2292,7 +2325,7 @@ tnsr::aa<DataType, 3> BinaryWithGravitationalWavesVariables<
       raise_or_lower_index(shift_right, spatial_metric_right);
   */
   superposed_spacetime_metric.get(0, 0) +=
-      0.;  // 2.;  // +
+      2.;  // +
            //  get(dot_product(shift_left, shift_right_down)) +
            //  get(dot_product(shift_right, shift_left_down));
 
