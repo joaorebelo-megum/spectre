@@ -5,6 +5,7 @@
 
 #include "Elliptic/BoundaryConditions/AnalyticSolution.hpp"
 #include "Elliptic/Systems/Xcts/BoundaryConditions/ApparentHorizon.hpp"
+#include "Elliptic/Systems/Xcts/BoundaryConditions/ApparentHorizonForBwGW.hpp"
 #include "Elliptic/Systems/Xcts/BoundaryConditions/Flatness.hpp"
 #include "Elliptic/Systems/Xcts/BoundaryConditions/InnerForBwGW.hpp"
 #include "Elliptic/Systems/Xcts/BoundaryConditions/Robin.hpp"
@@ -17,5 +18,6 @@ using standard_boundary_conditions =
                Flatness<System::enabled_equations>,
                Robin<System::enabled_equations>,
                ApparentHorizon<System::conformal_geometry>,
+               ApparentHorizonForBwGW<System::conformal_geometry>,
                InnerForBwGW<System::conformal_geometry>>;
 }
