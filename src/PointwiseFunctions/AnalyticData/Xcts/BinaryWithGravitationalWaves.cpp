@@ -523,7 +523,7 @@ void BinaryWithGravitationalWavesVariables<DataType>::operator()(
 template <typename DataType>
 void BinaryWithGravitationalWavesVariables<DataType>::operator()(
     gsl::not_null<tnsr::iJ<DataType, Dim>*> deriv_shift_background,
-    gsl::not_null<Cache*> cache,
+    gsl::not_null<Cache*> /*cache*/,
     ::Tags::deriv<Xcts::Tags::ShiftBackground<DataType, Dim, Frame::Inertial>,
                   tmpl::size_t<Dim>, Frame::Inertial> /*meta*/) const {
   /*
@@ -1785,13 +1785,16 @@ Scalar<DataType> BinaryWithGravitationalWavesVariables<DataType>::get_t_lapse(
   const auto conformal_metric_left = gr::spatial_metric(spacetime_metric_left);
   const auto inv_conformal_metric_left =
       determinant_and_inverse(conformal_metric_left).second;
-  const auto shift_left = gr::shift(spacetime_metric_left, inv_conformal_metric_left);
+  const auto shift_left =
+      gr::shift(spacetime_metric_left, inv_conformal_metric_left);
   const auto lapse_left = gr::lapse(shift_left, spacetime_metric_left);
   const auto spacetime_metric_right = get_t_boosted_spacetime_metric_right(t);
-  const auto conformal_metric_right = gr::spatial_metric(spacetime_metric_right);
+  const auto conformal_metric_right =
+      gr::spatial_metric(spacetime_metric_right);
   const auto inv_conformal_metric_right =
       determinant_and_inverse(conformal_metric_right).second;
-  const auto shift_right = gr::shift(spacetime_metric_right, inv_conformal_metric_right);
+  const auto shift_right =
+      gr::shift(spacetime_metric_right, inv_conformal_metric_right);
   const auto lapse_right = gr::lapse(shift_right, spacetime_metric_right);
   get(lapse_t) = get(lapse_left) + get(lapse_right) - 1.;
   return lapse_t;
@@ -1867,12 +1870,15 @@ BinaryWithGravitationalWavesVariables<DataType>::get_t_shift(DataType t) const {
   const auto conformal_metric_left = gr::spatial_metric(spacetime_metric_left);
   const auto inv_conformal_metric_left =
       determinant_and_inverse(conformal_metric_left).second;
-  const auto shift_left = gr::shift(spacetime_metric_left, inv_conformal_metric_left);
+  const auto shift_left =
+      gr::shift(spacetime_metric_left, inv_conformal_metric_left);
   const auto spacetime_metric_right = get_t_boosted_spacetime_metric_right(t);
-  const auto conformal_metric_right = gr::spatial_metric(spacetime_metric_right);
+  const auto conformal_metric_right =
+      gr::spatial_metric(spacetime_metric_right);
   const auto inv_conformal_metric_right =
       determinant_and_inverse(conformal_metric_right).second;
-  const auto shift_right = gr::shift(spacetime_metric_right, inv_conformal_metric_right);
+  const auto shift_right =
+      gr::shift(spacetime_metric_right, inv_conformal_metric_right);
   for (size_t i = 0; i < 3; ++i) {
     shift_t.get(i) =
         shift_left.get(i) + shift_right.get(i);

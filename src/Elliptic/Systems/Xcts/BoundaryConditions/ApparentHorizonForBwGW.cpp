@@ -33,7 +33,7 @@ template <Xcts::Geometry ConformalGeometry>
 ApparentHorizonForBwGW<ConformalGeometry>::ApparentHorizonForBwGW(
     double mass_left, double mass_right, double xcoord_left,
     double xcoord_right, double attenuation_parameter,
-    double attenuation_radius, double outer_radius,
+    double attenuation_radius, double outer_radius, bool left_or_right,
     const Options::Context& /*context*/)
     : mass_left_(mass_left),
       mass_right_(mass_right),
@@ -41,7 +41,8 @@ ApparentHorizonForBwGW<ConformalGeometry>::ApparentHorizonForBwGW(
       xcoord_right_(xcoord_right),
       attenuation_parameter_(attenuation_parameter),
       attenuation_radius_(attenuation_radius),
-      outer_radius_(outer_radius) {
+      outer_radius_(outer_radius),
+      left_or_right_(left_or_right) {
   solution_ =
       std::make_unique<Xcts::AnalyticData::BinaryWithGravitationalWaves>(
           mass_left, mass_right, xcoord_left, xcoord_right,
@@ -257,7 +258,8 @@ void ApparentHorizonForBwGW<ConformalGeometry>::apply(
       ::Tags::TempScalar<0>, ::Tags::Tempii<1, 3>, ::Tags::TempII<2, 3>,
       ::Tags::TempScalar<3>, ::Tags::TempI<4, 3>, ::Tags::TempScalar<5>,
       ::Tags::TempScalar<6>, ::Tags::TempScalar<7>, ::Tags::TempiJ<8, 3>,
-      ::Tags::Tempi<9, 3>, ::Tags::TempIjj<10, 3>, ::Tags::Tempijj<11, 3>>>
+      ::Tags::Tempi<9, 3>, ::Tags::TempIjj<10, 3>, ::Tags::Tempijj<11, 3>,
+      ::Tags::TempI<12, 3>>>
       buffer{x.begin()->size()};
 
   Scalar<DataVector>& trace_extrinsic_curvature =
@@ -330,9 +332,16 @@ void ApparentHorizonForBwGW<ConformalGeometry>::apply(
       sqrt(total_mass / cube(separation)) *
       (1. + .5 * (reduced_mass / total_mass - 3.) * total_mass / separation);
   const std::array<double, 3> rotation = {0., 0., -angular_velocity};
+  tnsr::I<DataVector, 3>& x_centered = get<::Tags::TempI<12, 3>>(buffer);
+  x_centered = x;
+  if (left_or_right_ == false) {
+    x_centered.get(0) = x.get(0) - xcoord_right_;
+  } else if (left_or_right_ == true) {
+    x_centered.get(0) = x.get(0) - xcoord_left_;
+  }
   for (LeviCivitaIterator<3> it; it; ++it) {
     shift_excess->get(it[0]) +=
-        it.sign() * gsl::at(rotation, it[1]) * x.get(it[2]);
+        it.sign() * gsl::at(rotation, it[1]) * x_centered.get(it[2]);
   }
 
   // Conformal factor
