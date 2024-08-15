@@ -78,9 +78,15 @@ class ApparentHorizonForBwGW
         "The radius of the outer boundary of the computational domain.";
     using type = double;
   };
-  using options =
-      tmpl::list<MassLeft, MassRight, XCoordsLeft, XCoordsRight,
-                 AttenuationParameter, AttenuationRadius, OuterRadius>;
+  struct LeftOrRight {
+    static constexpr Options::String help =
+        "'True' for left black hole boundary and 'False' for right black hole "
+        "boundary.";
+    using type = bool;
+  };
+  using options = tmpl::list<MassLeft, MassRight, XCoordsLeft, XCoordsRight,
+                             AttenuationParameter, AttenuationRadius,
+                             OuterRadius, LeftOrRight>;
   static constexpr Options::String help =
       "Impose Schwarzschild isotropic in Inner Boundary.";
 
@@ -101,13 +107,15 @@ class ApparentHorizonForBwGW
       const override {
     return std::make_unique<ApparentHorizonForBwGW>(
         mass_left_, mass_right_, xcoord_left_, xcoord_right_,
-        attenuation_parameter_, attenuation_radius_, outer_radius_);
+        attenuation_parameter_, attenuation_radius_, outer_radius_,
+        left_or_right_);
   }
 
   ApparentHorizonForBwGW(double mass_left, double mass_right,
                          double xcoord_left, double xcoord_right,
                          double attenuation_parameter,
                          double attenuation_radius, double outer_radius,
+                         bool left_or_right,
                          const Options::Context& context = {});
 
   std::vector<elliptic::BoundaryConditionType> boundary_condition_types()
@@ -186,6 +194,7 @@ class ApparentHorizonForBwGW
   double attenuation_parameter_{std::numeric_limits<double>::signaling_NaN()};
   double attenuation_radius_{std::numeric_limits<double>::signaling_NaN()};
   double outer_radius_{std::numeric_limits<double>::signaling_NaN()};
+  bool left_or_right_{false};
 
   std::optional<
       std::unique_ptr<Xcts::AnalyticData::BinaryWithGravitationalWaves>>
