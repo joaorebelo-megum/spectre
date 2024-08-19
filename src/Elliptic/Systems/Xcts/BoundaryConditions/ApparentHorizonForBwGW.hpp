@@ -155,12 +155,15 @@ class ApparentHorizonForBwGW
       const tnsr::ij<DataVector, 3>& deriv_unnormalized_face_normal,
       const Scalar<DataVector>& face_normal_magnitude) const;
 
-  using argument_tags_linearized =
-      tmpl::list<domain::Tags::Coordinates<3, Frame::Inertial>,
-                 domain::Tags::FaceNormal<3>,
-                 ::Tags::deriv<domain::Tags::UnnormalizedFaceNormal<3>,
-                               tmpl::size_t<3>, Frame::Inertial>,
-                 domain::Tags::UnnormalizedFaceNormalMagnitude<3>>;
+  using argument_tags_linearized = tmpl::list<
+      domain::Tags::Coordinates<3, Frame::Inertial>,
+      domain::Tags::FaceNormal<3>,
+      ::Tags::deriv<domain::Tags::UnnormalizedFaceNormal<3>, tmpl::size_t<3>,
+                    Frame::Inertial>,
+      domain::Tags::UnnormalizedFaceNormalMagnitude<3>,
+      Tags::ConformalFactorMinusOne<DataVector>,
+      Tags::LapseTimesConformalFactorMinusOne<DataVector>,
+      ::Tags::NormalDotFlux<Tags::ShiftExcess<DataVector, 3, Frame::Inertial>>>;
   using volume_tags_linearized = tmpl::list<>;
 
   void apply_linearized(
@@ -181,7 +184,10 @@ class ApparentHorizonForBwGW
       const tnsr::I<DataVector, 3>& x,
       const tnsr::i<DataVector, 3>& face_normal,
       const tnsr::ij<DataVector, 3>& deriv_unnormalized_face_normal,
-      const Scalar<DataVector>& face_normal_magnitude) const;
+      const Scalar<DataVector>& face_normal_magnitude,
+      const Scalar<DataVector>& conformal_factor_minus_one,
+      const Scalar<DataVector>& lapse_times_conformal_factor_minus_one,
+      const tnsr::I<DataVector, 3>& n_dot_longitudinal_shift_excess) const;
 
   // NOLINTNEXTLINE(google-runtime-references)
   void pup(PUP::er& p) override;
