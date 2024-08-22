@@ -119,91 +119,6 @@ void normal_gradient_term(
   }
 }
 
-void compute_deriv_solution(
-    const tnsr::I<DataVector, 3>& x,
-    const std::optional<
-        std::unique_ptr<Xcts::AnalyticData::BinaryWithGravitationalWaves>>&
-        solution,
-    const gsl::not_null<Scalar<DataVector>*> trace_extrinsic_curvature,
-    const gsl::not_null<tnsr::iJ<DataVector, 3>*> deriv_shift,
-    const gsl::not_null<tnsr::i<DataVector, 3>*>
-        deriv_lapse_times_conformal_factor_minus_one,
-    const gsl::not_null<tnsr::ijj<DataVector, 3>*> deriv_conformal_metric) {
-  using deriv_tags = tmpl::list<
-      gr::Tags::TraceExtrinsicCurvature<DataVector>,
-      ::Tags::deriv<Xcts::Tags::ShiftExcess<DataVector, 3, Frame::Inertial>,
-                    tmpl::size_t<3>, Frame::Inertial>,
-      ::Tags::deriv<Xcts::Tags::LapseTimesConformalFactorMinusOne<DataVector>,
-                    tmpl::size_t<3>, Frame::Inertial>,
-      //::Xcts::Tags::ConformalChristoffelSecondKind<DataVector, 3,
-      //                                           Frame::Inertial>,
-      ::Tags::deriv<
-          ::Xcts::Tags::ConformalMetric<DataVector, 3, Frame::Inertial>,
-          tmpl::size_t<3>, Frame::Inertial>>;
-  for (size_t k = 0; k < x.get(0).size(); ++k) {
-    using Affine = domain::CoordinateMaps::Affine;
-    using Affine3D =
-        domain::CoordinateMaps::ProductOf3Maps<Affine, Affine, Affine>;
-    // Setup grid
-    const size_t num_points_1d_k = 5;
-    const std::array<double, 3> lower_bound_k{
-        {x.get(0)[k] - 0.0001, x.get(1)[k] - 0.0001, x.get(2)[k] - 0.0001}};
-    const std::array<double, 3> upper_bound_k{
-        {x.get(0)[k] + 0.0001, x.get(1)[k] + 0.0001, x.get(2)[k] + 0.0001}};
-    Mesh<3> mesh_k{num_points_1d_k, Spectral::Basis::Legendre,
-                   Spectral::Quadrature::GaussLobatto};
-    const auto coord_map_k =
-        domain::make_coordinate_map<Frame::ElementLogical, Frame::Inertial>(
-            Affine3D{
-                Affine{-1., 1., lower_bound_k[0], upper_bound_k[0]},
-                Affine{-1., 1., lower_bound_k[1], upper_bound_k[1]},
-                Affine{-1., 1., lower_bound_k[2], upper_bound_k[2]},
-            });
-    const size_t num_points_3d_k =
-        num_points_1d_k * num_points_1d_k * num_points_1d_k;
-    const DataVector used_for_size_k = DataVector(
-        num_points_3d_k, std::numeric_limits<double>::signaling_NaN());
-    // Setup coordinates
-    const auto x_logical_k = logical_coordinates(mesh_k);
-    const auto x_inertial_k = coord_map_k(x_logical_k);
-    const auto inv_jacobian_k = coord_map_k.inv_jacobian(x_logical_k);
-    // Get variables
-    const auto solution_deriv =
-        variables_from_tagged_tuple((*solution)->variables(
-            x_inertial_k, mesh_k, inv_jacobian_k, deriv_tags{}));
-    const auto trace_extrinsic_curvature_aux =
-        get<gr::Tags::TraceExtrinsicCurvature<DataVector>>(solution_deriv);
-    const auto deriv_shift_aux = get<
-        ::Tags::deriv<Xcts::Tags::ShiftExcess<DataVector, 3, Frame::Inertial>,
-                      tmpl::size_t<3>, Frame::Inertial>>(solution_deriv);
-    const auto deriv_lapse_times_conformal_factor_minus_one_aux = get<
-        ::Tags::deriv<Xcts::Tags::LapseTimesConformalFactorMinusOne<DataVector>,
-                      tmpl::size_t<3>, Frame::Inertial>>(solution_deriv);
-    const auto deriv_conformal_metric_aux = get<::Tags::deriv<
-        ::Xcts::Tags::ConformalMetric<DataVector, 3, Frame::Inertial>,
-        tmpl::size_t<3>, Frame::Inertial>>(solution_deriv);
-    for (size_t l = 0; l < x_inertial_k.get(0).size(); ++l) {
-      if (x.get(0)[k] == x_inertial_k.get(0)[l] &&
-          x.get(1)[k] == x_inertial_k.get(1)[l] &&
-          x.get(2)[k] == x_inertial_k.get(2)[l]) {
-        get(*trace_extrinsic_curvature)[k] =
-            get(trace_extrinsic_curvature_aux)[l];
-        for (size_t i = 0; i < 3; ++i) {
-          for (size_t j = 0; j < 3; ++j) {
-            for (size_t m = 0; m < 3; ++m) {
-              deriv_conformal_metric->get(i, j, m)[k] =
-                  deriv_conformal_metric_aux.get(i, j, m)[l];
-            }
-            deriv_shift->get(i, j)[k] = deriv_shift_aux.get(i, j)[l];
-          }
-          deriv_lapse_times_conformal_factor_minus_one->get(i)[k] =
-              deriv_lapse_times_conformal_factor_minus_one_aux.get(i)[l];
-        }
-        break;
-      }
-    }
-  }
-}
 /*
 void shift_check(
     const tnsr::I<DataVector, 3>& x,
@@ -495,73 +410,70 @@ void ApparentHorizonForBwGW<ConformalGeometry>::apply(
     const tnsr::iJ<DataVector, 3>& /*deriv_shift_excess_correction1*/,
     const tnsr::I<DataVector, 3>& x, const tnsr::i<DataVector, 3>& face_normal,
     const tnsr::ij<DataVector, 3>& deriv_unnormalized_face_normal,
-    const Scalar<DataVector>& face_normal_magnitude) const {
-  // Compute quantities from solution
-  using analytic_tags = tmpl::list<
-      ::Xcts::Tags::ConformalMetric<DataVector, 3, Frame::Inertial>,
-      ::Xcts::Tags::InverseConformalMetric<DataVector, 3, Frame::Inertial>,
-      Xcts::Tags::LapseTimesConformalFactorMinusOne<DataVector>,
-      Xcts::Tags::ConformalFactorMinusOne<DataVector>,
-      Xcts::Tags::ShiftExcess<DataVector, 3, Frame::Inertial>,
-      Xcts::Tags::LongitudinalShiftBackgroundMinusDtConformalMetric<
-          DataVector, 3, Frame::Inertial>>;
-  const auto solution_vars =
-      variables_from_tagged_tuple((*solution_)->variables(x, analytic_tags{}));
-  const auto& spatial_metric =
-      get<::Xcts::Tags::ConformalMetric<DataVector, 3, Frame::Inertial>>(
-          solution_vars);
-  const auto& inv_spatial_metric =
-      get<::Xcts::Tags::InverseConformalMetric<DataVector, 3, Frame::Inertial>>(
-          solution_vars);
-  const auto& lapse_times_conformal_factor_minus_one_solution =
-      get<Xcts::Tags::LapseTimesConformalFactorMinusOne<DataVector>>(
-          solution_vars);
-  const auto& conformal_factor_minus_one_solution =
-      get<Xcts::Tags::ConformalFactorMinusOne<DataVector>>(solution_vars);
-  const auto& shift =
-      get<Xcts::Tags::ShiftExcess<DataVector, 3, Frame::Inertial>>(
-          solution_vars);
-  const auto& minus_dt_conformal_metric =
-      get<Xcts::Tags::LongitudinalShiftBackgroundMinusDtConformalMetric<
-          DataVector, 3, Frame::Inertial>>(solution_vars);
-
+    const Scalar<DataVector>& face_normal_magnitude,
+    const tnsr::ii<DataVector, 3> spatial_metric,
+    const tnsr::II<DataVector, 3> inv_spatial_metric,
+    const tnsr::II<DataVector, 3> minus_dt_conformal_metric,
+    const Mesh<3>& mesh,
+    const InverseJacobian<DataVector, 3, Frame::ElementLogical,
+                          Frame::Inertial>& inv_jacobian,
+    const Scalar<DataVector> trace_extrinsic_curvature_volume,
+    const tnsr::Ijj<DataVector, 3> spatial_christoffel_second_kind_volume,
+    const Scalar<DataVector>& lapse_times_conformal_factor_minus_one_volume,
+    const tnsr::I<DataVector, 3>& shift_excess_volume) const {
   // Allocate temporary memory
   TempBuffer<tmpl::list<
       ::Tags::TempScalar<0>, ::Tags::Tempii<1, 3>, ::Tags::TempII<2, 3>,
       ::Tags::TempScalar<3>, ::Tags::TempI<4, 3>, ::Tags::TempScalar<5>,
-      ::Tags::TempScalar<6>, ::Tags::TempScalar<7>, ::Tags::TempiJ<8, 3>,
-      ::Tags::Tempi<9, 3>, ::Tags::TempIjj<10, 3>, ::Tags::Tempijj<11, 3>,
-      ::Tags::TempI<12, 3>>>
+      ::Tags::TempScalar<6>, ::Tags::TempiJ<7, 3>, ::Tags::Tempi<8, 3>,
+      ::Tags::TempScalar<9>, ::Tags::TempIjj<10, 3>>>
       buffer{x.begin()->size()};
-
-  Scalar<DataVector>& trace_extrinsic_curvature =
-      get<::Tags::TempScalar<7>>(buffer);
-  tnsr::iJ<DataVector, 3>& deriv_shift = get<::Tags::TempiJ<8, 3>>(buffer);
-  tnsr::i<DataVector, 3>& deriv_lapse_times_conformal_factor_minus_one =
-      get<::Tags::Tempi<9, 3>>(buffer);
-  tnsr::Ijj<DataVector, 3>& spatial_christoffel_second_kind =
-      get<::Tags::TempIjj<10, 3>>(buffer);
-  tnsr::ijj<DataVector, 3>& deriv_conformal_metric =
-      get<::Tags::Tempijj<11, 3>>(buffer);
-  compute_deriv_solution(
-      x, solution_, make_not_null(&trace_extrinsic_curvature),
-      make_not_null(&deriv_shift),
-      make_not_null(&deriv_lapse_times_conformal_factor_minus_one),
-      make_not_null(&deriv_conformal_metric));
-  raise_or_lower_first_index(make_not_null(&spatial_christoffel_second_kind),
-                             gr::christoffel_first_kind(deriv_conformal_metric),
-                             inv_spatial_metric);
-
+  auto& face_normal_raised = get<::Tags::TempI<4, 3>>(buffer);
+  raise_or_lower_index(make_not_null(&face_normal_raised), face_normal,
+                       inv_spatial_metric);
   auto& lapse = get<::Tags::TempScalar<0>>(buffer);
   auto& conformal_factor = get<::Tags::TempScalar<3>>(buffer);
-  get(conformal_factor) = 1. + get(conformal_factor_minus_one_solution);
-  get(lapse) = (1. + get(lapse_times_conformal_factor_minus_one_solution)) /
+  get(conformal_factor) = 1. + get(*conformal_factor_minus_one);
+  get(lapse) = (1. + get(*lapse_times_conformal_factor_minus_one)) /
                get(conformal_factor);
   auto& longitudinal_shift_excess_minus_dt_conformal_metric =
       get<::Tags::TempII<2, 3>>(buffer);
+  auto& deriv_shift = get<::Tags::TempiJ<7, 3>>(buffer);
+  auto& deriv_lapse_times_conformal_factor_minus_one =
+      get<::Tags::Tempi<8, 3>>(buffer);
+  const auto deriv_lapse_times_conformal_factor_minus_one_aux =
+      partial_derivative(lapse_times_conformal_factor_minus_one_volume, mesh,
+                         inv_jacobian);
+  const auto deriv_shift_aux =
+      partial_derivative(shift_excess_volume, mesh, inv_jacobian);
+  auto& trace_extrinsic_curvature = get<::Tags::TempScalar<9>>(buffer);
+  auto& spatial_christoffel_second_kind = get<::Tags::TempIjj<10, 3>>(buffer);
+  for (size_t k = 0; k < shift_excess->get(0).size(); ++k) {
+    for (size_t l = 0; l < shift_excess_volume.get(0).size(); ++l) {
+      if (shift_excess->get(0)[k] == shift_excess_volume.get(0)[l] &&
+          shift_excess->get(1)[k] == shift_excess_volume.get(1)[l] &&
+          shift_excess->get(2)[k] == shift_excess_volume.get(2)[l]) {
+        for (size_t i = 0; i < 3; ++i) {
+          for (size_t j = 0; j < 3; ++j) {
+            for (size_t m = 0; m < 3; ++m) {
+              spatial_christoffel_second_kind.get(i, j, m)[k] =
+                  spatial_christoffel_second_kind_volume.get(i, j, m)[l];
+            }
+            deriv_shift.get(i, j)[k] = deriv_shift_aux.get(i, j)[l];
+          }
+          deriv_lapse_times_conformal_factor_minus_one.get(i)[k] =
+              deriv_lapse_times_conformal_factor_minus_one_aux.get(i)[l];
+        }
+        get(trace_extrinsic_curvature)[k] =
+            get(trace_extrinsic_curvature_volume)[l];
+        break;
+      }
+    }
+  }
   Xcts::longitudinal_operator(
       make_not_null(&longitudinal_shift_excess_minus_dt_conformal_metric),
-      shift, deriv_shift, inv_spatial_metric, spatial_christoffel_second_kind);
+      *shift_excess, deriv_shift, inv_spatial_metric,
+      spatial_christoffel_second_kind);
   for (size_t i = 0; i < 3; ++i) {
     for (size_t j = 0; j < i; ++j) {
       longitudinal_shift_excess_minus_dt_conformal_metric.get(i, j) +=
@@ -573,9 +485,6 @@ void ApparentHorizonForBwGW<ConformalGeometry>::apply(
                             conformal_factor, lapse, spatial_metric,
                             longitudinal_shift_excess_minus_dt_conformal_metric,
                             trace_extrinsic_curvature);
-  auto& face_normal_raised = get<::Tags::TempI<4, 3>>(buffer);
-  raise_or_lower_index(make_not_null(&face_normal_raised), face_normal,
-                       inv_spatial_metric);
 
   // Compute quantities for negative-expansion boundary conditions.
   Scalar<DataVector>& expansion_of_solution =
@@ -585,7 +494,7 @@ void ApparentHorizonForBwGW<ConformalGeometry>::apply(
       make_not_null(&expansion_of_solution), make_not_null(&beta_orthogonal),
       face_normal, deriv_unnormalized_face_normal, face_normal_magnitude,
       inv_spatial_metric, face_normal_raised, spatial_christoffel_second_kind,
-      extrinsic_curvature, shift, lapse);
+      extrinsic_curvature, *shift_excess, lapse);
 
   // Shift
   get(beta_orthogonal) /= square(get(*conformal_factor_minus_one) + 1.);
@@ -689,73 +598,62 @@ void ApparentHorizonForBwGW<ConformalGeometry>::apply_linearized(
     const Scalar<DataVector>& face_normal_magnitude,
     const Scalar<DataVector>& conformal_factor_minus_one,
     const Scalar<DataVector>& lapse_times_conformal_factor_minus_one,
-    const tnsr::I<DataVector, 3>& n_dot_longitudinal_shift_excess) const {
-  // Compute quantities from solution
-
-  using analytic_tags = tmpl::list<
-      ::Xcts::Tags::ConformalMetric<DataVector, 3, Frame::Inertial>,
-      ::Xcts::Tags::InverseConformalMetric<DataVector, 3, Frame::Inertial>,
-      Xcts::Tags::LapseTimesConformalFactorMinusOne<DataVector>,
-      Xcts::Tags::ConformalFactorMinusOne<DataVector>,
-      Xcts::Tags::ShiftExcess<DataVector, 3, Frame::Inertial>,
-      Xcts::Tags::LongitudinalShiftBackgroundMinusDtConformalMetric<
-          DataVector, 3, Frame::Inertial>>;
-  const auto solution_vars =
-      variables_from_tagged_tuple((*solution_)->variables(x, analytic_tags{}));
-  const auto& spatial_metric =
-      get<::Xcts::Tags::ConformalMetric<DataVector, 3, Frame::Inertial>>(
-          solution_vars);
-  const auto& inv_spatial_metric =
-      get<::Xcts::Tags::InverseConformalMetric<DataVector, 3, Frame::Inertial>>(
-          solution_vars);
-  const auto& lapse_times_conformal_factor_minus_one_solution =
-      get<Xcts::Tags::LapseTimesConformalFactorMinusOne<DataVector>>(
-          solution_vars);
-  const auto& conformal_factor_minus_one_solution =
-      get<Xcts::Tags::ConformalFactorMinusOne<DataVector>>(solution_vars);
-  const auto& shift =
-      get<Xcts::Tags::ShiftExcess<DataVector, 3, Frame::Inertial>>(
-          solution_vars);
-  const auto& minus_dt_conformal_metric =
-      get<Xcts::Tags::LongitudinalShiftBackgroundMinusDtConformalMetric<
-          DataVector, 3, Frame::Inertial>>(solution_vars);
-
+    const tnsr::I<DataVector, 3>& n_dot_longitudinal_shift_excess,
+    const tnsr::ii<DataVector, 3> spatial_metric,
+    const tnsr::II<DataVector, 3> inv_spatial_metric,
+    const tnsr::II<DataVector, 3> minus_dt_conformal_metric,
+    const Mesh<3>& mesh,
+    const InverseJacobian<DataVector, 3, Frame::ElementLogical,
+                          Frame::Inertial>& inv_jacobian,
+    const Scalar<DataVector> trace_extrinsic_curvature_volume,
+    const tnsr::Ijj<DataVector, 3> spatial_christoffel_second_kind_volume,
+    const tnsr::I<DataVector, 3>& shift_excess_volume) const {
   // Allocate temporary memory
-  TempBuffer<tmpl::list<
-      ::Tags::TempScalar<0>, ::Tags::Tempii<1, 3>, ::Tags::TempII<2, 3>,
-      ::Tags::TempScalar<3>, ::Tags::TempI<4, 3>, ::Tags::TempScalar<5>,
-      ::Tags::TempScalar<6>, ::Tags::TempScalar<7>, ::Tags::TempiJ<8, 3>,
-      ::Tags::Tempi<9, 3>, ::Tags::TempIjj<10, 3>, ::Tags::Tempijj<11, 3>>>
+  TempBuffer<tmpl::list<::Tags::TempScalar<0>, ::Tags::Tempii<1, 3>,
+                        ::Tags::TempII<2, 3>, ::Tags::TempScalar<3>,
+                        ::Tags::TempI<4, 3>, ::Tags::TempScalar<5>,
+                        ::Tags::TempScalar<6>, ::Tags::TempiJ<7, 3>,
+                        ::Tags::TempScalar<8>, ::Tags::TempIjj<9, 3>>>
       buffer{x.begin()->size()};
-
-  Scalar<DataVector>& trace_extrinsic_curvature =
-      get<::Tags::TempScalar<7>>(buffer);
-  tnsr::iJ<DataVector, 3>& deriv_shift = get<::Tags::TempiJ<8, 3>>(buffer);
-  tnsr::i<DataVector, 3>& deriv_lapse_times_conformal_factor_minus_one =
-      get<::Tags::Tempi<9, 3>>(buffer);
-  tnsr::Ijj<DataVector, 3>& spatial_christoffel_second_kind =
-      get<::Tags::TempIjj<10, 3>>(buffer);
-  tnsr::ijj<DataVector, 3>& deriv_conformal_metric =
-      get<::Tags::Tempijj<11, 3>>(buffer);
-  compute_deriv_solution(
-      x, solution_, make_not_null(&trace_extrinsic_curvature),
-      make_not_null(&deriv_shift),
-      make_not_null(&deriv_lapse_times_conformal_factor_minus_one),
-      make_not_null(&deriv_conformal_metric));
-  raise_or_lower_first_index(make_not_null(&spatial_christoffel_second_kind),
-                             gr::christoffel_first_kind(deriv_conformal_metric),
-                             inv_spatial_metric);
-
+  auto& face_normal_raised = get<::Tags::TempI<4, 3>>(buffer);
+  raise_or_lower_index(make_not_null(&face_normal_raised), face_normal,
+                       inv_spatial_metric);
   auto& lapse = get<::Tags::TempScalar<0>>(buffer);
   auto& conformal_factor = get<::Tags::TempScalar<3>>(buffer);
-  get(conformal_factor) = 1. + get(conformal_factor_minus_one_solution);
-  get(lapse) = (1. + get(lapse_times_conformal_factor_minus_one_solution)) /
+  get(conformal_factor) = 1. + get(*conformal_factor_minus_one);
+  get(lapse) = (1. + get(*lapse_times_conformal_factor_minus_one)) /
                get(conformal_factor);
   auto& longitudinal_shift_excess_minus_dt_conformal_metric =
       get<::Tags::TempII<2, 3>>(buffer);
+  auto& deriv_shift = get<::Tags::TempiJ<7, 3>>(buffer);
+  const auto deriv_shift_aux =
+      partial_derivative(shift_excess_volume, mesh, inv_jacobian);
+  auto& trace_extrinsic_curvature = get<::Tags::TempScalar<8>>(buffer);
+  auto& spatial_christoffel_second_kind = get<::Tags::TempIjj<9, 3>>(buffer);
+  for (size_t k = 0; k < shift_excess->get(0).size(); ++k) {
+    for (size_t l = 0; l < shift_excess_volume.get(0).size(); ++l) {
+      if (shift_excess->get(0)[k] == shift_excess_volume.get(0)[l] &&
+          shift_excess->get(1)[k] == shift_excess_volume.get(1)[l] &&
+          shift_excess->get(2)[k] == shift_excess_volume.get(2)[l]) {
+        for (size_t i = 0; i < 3; ++i) {
+          for (size_t j = 0; j < 3; ++j) {
+            for (size_t m = 0; m < 3; ++m) {
+              spatial_christoffel_second_kind.get(i, j, m)[k] =
+                  spatial_christoffel_second_kind_volume.get(i, j, m)[l];
+            }
+            deriv_shift.get(i, j)[k] = deriv_shift_aux.get(i, j)[l];
+          }
+        }
+        get(trace_extrinsic_curvature)[k] =
+            get(trace_extrinsic_curvature_volume)[l];
+        break;
+      }
+    }
+  }
   Xcts::longitudinal_operator(
       make_not_null(&longitudinal_shift_excess_minus_dt_conformal_metric),
-      shift, deriv_shift, inv_spatial_metric, spatial_christoffel_second_kind);
+      *shift_excess, deriv_shift, inv_spatial_metric,
+      spatial_christoffel_second_kind);
   for (size_t i = 0; i < 3; ++i) {
     for (size_t j = 0; j < i; ++j) {
       longitudinal_shift_excess_minus_dt_conformal_metric.get(i, j) +=
@@ -767,9 +665,6 @@ void ApparentHorizonForBwGW<ConformalGeometry>::apply_linearized(
                             conformal_factor, lapse, spatial_metric,
                             longitudinal_shift_excess_minus_dt_conformal_metric,
                             trace_extrinsic_curvature);
-  auto& face_normal_raised = get<::Tags::TempI<4, 3>>(buffer);
-  raise_or_lower_index(make_not_null(&face_normal_raised), face_normal,
-                       inv_spatial_metric);
 
   // Compute quantities for negative-expansion boundary conditions
   Scalar<DataVector>& expansion_of_solution =
