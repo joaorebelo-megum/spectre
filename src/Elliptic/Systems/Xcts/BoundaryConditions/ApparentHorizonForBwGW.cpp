@@ -608,6 +608,14 @@ void ApparentHorizonForBwGW<ConformalGeometry>::apply_linearized(
     const Scalar<DataVector> trace_extrinsic_curvature_volume,
     const tnsr::Ijj<DataVector, 3> spatial_christoffel_second_kind_volume,
     const tnsr::I<DataVector, 3>& shift_excess_volume) const {
+  // Compute shift excess on the surface points
+  using analytic_tags =
+      tmpl::list<Xcts::Tags::ShiftExcess<DataVector, 3, Frame::Inertial>>;
+  const auto solution_vars =
+      variables_from_tagged_tuple((*solution_)->variables(x, analytic_tags{}));
+  const auto& shift =
+      get<Xcts::Tags::ShiftExcess<DataVector, 3, Frame::Inertial>>(
+          solution_vars);
   // Allocate temporary memory
   TempBuffer<tmpl::list<::Tags::TempScalar<0>, ::Tags::Tempii<1, 3>,
                         ::Tags::TempII<2, 3>, ::Tags::TempScalar<3>,
@@ -620,8 +628,8 @@ void ApparentHorizonForBwGW<ConformalGeometry>::apply_linearized(
                        inv_spatial_metric);
   auto& lapse = get<::Tags::TempScalar<0>>(buffer);
   auto& conformal_factor = get<::Tags::TempScalar<3>>(buffer);
-  get(conformal_factor) = 1. + get(*conformal_factor_minus_one);
-  get(lapse) = (1. + get(*lapse_times_conformal_factor_minus_one)) /
+  get(conformal_factor) = 1. + get(conformal_factor_minus_one);
+  get(lapse) = (1. + get(lapse_times_conformal_factor_minus_one)) /
                get(conformal_factor);
   auto& longitudinal_shift_excess_minus_dt_conformal_metric =
       get<::Tags::TempII<2, 3>>(buffer);
@@ -630,11 +638,11 @@ void ApparentHorizonForBwGW<ConformalGeometry>::apply_linearized(
       partial_derivative(shift_excess_volume, mesh, inv_jacobian);
   auto& trace_extrinsic_curvature = get<::Tags::TempScalar<8>>(buffer);
   auto& spatial_christoffel_second_kind = get<::Tags::TempIjj<9, 3>>(buffer);
-  for (size_t k = 0; k < shift_excess->get(0).size(); ++k) {
+  for (size_t k = 0; k < shift.get(0).size(); ++k) {
     for (size_t l = 0; l < shift_excess_volume.get(0).size(); ++l) {
-      if (shift_excess->get(0)[k] == shift_excess_volume.get(0)[l] &&
-          shift_excess->get(1)[k] == shift_excess_volume.get(1)[l] &&
-          shift_excess->get(2)[k] == shift_excess_volume.get(2)[l]) {
+      if (shift.get(0)[k] == shift_excess_volume.get(0)[l] &&
+          shift.get(1)[k] == shift_excess_volume.get(1)[l] &&
+          shift.get(2)[k] == shift_excess_volume.get(2)[l]) {
         for (size_t i = 0; i < 3; ++i) {
           for (size_t j = 0; j < 3; ++j) {
             for (size_t m = 0; m < 3; ++m) {
@@ -652,8 +660,7 @@ void ApparentHorizonForBwGW<ConformalGeometry>::apply_linearized(
   }
   Xcts::longitudinal_operator(
       make_not_null(&longitudinal_shift_excess_minus_dt_conformal_metric),
-      *shift_excess, deriv_shift, inv_spatial_metric,
-      spatial_christoffel_second_kind);
+      shift, deriv_shift, inv_spatial_metric, spatial_christoffel_second_kind);
   for (size_t i = 0; i < 3; ++i) {
     for (size_t j = 0; j < i; ++j) {
       longitudinal_shift_excess_minus_dt_conformal_metric.get(i, j) +=
@@ -733,8 +740,8 @@ void ApparentHorizonForBwGW<ConformalGeometry>::apply_linearized(
   normal_dot_flux(make_not_null(&nn_dot_longitudinal_shift_correction),
                   face_normal, *n_dot_longitudinal_shift_excess_correction);
   get(*n_dot_conformal_factor_gradient_correction) +=
-      0.125 * pow<4>(get(conformal_factor_minus_one_solution) + 1.) /
-      (get(lapse_times_conformal_factor_minus_one_solution) + 1.) *
+      0.125 * pow<4>(get(conformal_factor_minus_one) + 1.) /
+      (get(lapse_times_conformal_factor_minus_one) + 1.) *
       get(nn_dot_longitudinal_shift_correction);
 
   // Lapse
