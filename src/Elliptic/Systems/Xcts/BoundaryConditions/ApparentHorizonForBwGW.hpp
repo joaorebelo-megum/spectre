@@ -172,14 +172,14 @@ class ApparentHorizonForBwGW
       const tnsr::i<DataVector, 3>& face_normal,
       const tnsr::ij<DataVector, 3>& deriv_unnormalized_face_normal,
       const Scalar<DataVector>& face_normal_magnitude,
-      const tnsr::ii<DataVector, 3> spatial_metric,
-      const tnsr::II<DataVector, 3> inv_spatial_metric,
-      const tnsr::II<DataVector, 3> minus_dt_conformal_metric,
+      const tnsr::ii<DataVector, 3>& spatial_metric,
+      const tnsr::II<DataVector, 3>& inv_spatial_metric,
+      const tnsr::II<DataVector, 3>& minus_dt_conformal_metric,
       const Mesh<3>& mesh,
       const InverseJacobian<DataVector, 3, Frame::ElementLogical,
                             Frame::Inertial>& inv_jacobian,
-      const Scalar<DataVector> trace_extrinsic_curvature_volume,
-      const tnsr::Ijj<DataVector, 3> spatial_christoffel_second_kind_volume,
+      const Scalar<DataVector>& trace_extrinsic_curvature_volume,
+      const tnsr::Ijj<DataVector, 3>& spatial_christoffel_second_kind_volume,
       const Scalar<DataVector>& lapse_times_conformal_factor_minus_one_volume,
       const tnsr::I<DataVector, 3>& shift_excess_volume) const;
 
@@ -195,20 +195,20 @@ class ApparentHorizonForBwGW
       ::Xcts::Tags::ConformalMetric<DataVector, 3, Frame::Inertial>,
       ::Xcts::Tags::InverseConformalMetric<DataVector, 3, Frame::Inertial>,
       Xcts::Tags::LongitudinalShiftBackgroundMinusDtConformalMetric<
-          DataVector, 3, Frame::Inertial>,
-      domain::Tags::Mesh<3>,
-      domain::Tags::InverseJacobian<3, Frame::ElementLogical, Frame::Inertial>,
-      gr::Tags::TraceExtrinsicCurvature<DataVector>,
-      ::Xcts::Tags::ConformalChristoffelSecondKind<DataVector, 3,
-                                                   Frame::Inertial>,
-      Xcts::Tags::ShiftExcess<DataVector, 3, Frame::Inertial>>;
-  using volume_tags_linearized = tmpl::list<
-      domain::Tags::Mesh<3>,
-      domain::Tags::InverseJacobian<3, Frame::ElementLogical, Frame::Inertial>,
-      gr::Tags::TraceExtrinsicCurvature<DataVector>,
-      ::Xcts::Tags::ConformalChristoffelSecondKind<DataVector, 3,
-                                                   Frame::Inertial>,
-      Xcts::Tags::ShiftExcess<DataVector, 3, Frame::Inertial>>;
+          DataVector, 3, Frame::Inertial>>;
+  // domain::Tags::Mesh<3>,
+  // domain::Tags::InverseJacobian<3, Frame::ElementLogical, Frame::Inertial>,
+  // gr::Tags::TraceExtrinsicCurvature<DataVector>,
+  //::Xcts::Tags::ConformalChristoffelSecondKind<DataVector, 3,
+  //                                             Frame::Inertial>,
+  // Xcts::Tags::ShiftExcess<DataVector, 3, Frame::Inertial>>;
+  using volume_tags_linearized = tmpl::list<>;
+  // domain::Tags::Mesh<3>,
+  // domain::Tags::InverseJacobian<3, Frame::ElementLogical, Frame::Inertial>,
+  // gr::Tags::TraceExtrinsicCurvature<DataVector>,
+  //::Xcts::Tags::ConformalChristoffelSecondKind<DataVector, 3,
+  //                                             Frame::Inertial>,
+  // Xcts::Tags::ShiftExcess<DataVector, 3, Frame::Inertial>>;
 
   void apply_linearized(
       gsl::not_null<Scalar<DataVector>*> conformal_factor_correction,
@@ -232,15 +232,15 @@ class ApparentHorizonForBwGW
       const Scalar<DataVector>& conformal_factor_minus_one,
       const Scalar<DataVector>& lapse_times_conformal_factor_minus_one,
       const tnsr::I<DataVector, 3>& n_dot_longitudinal_shift_excess,
-      const tnsr::ii<DataVector, 3> spatial_metric,
-      const tnsr::II<DataVector, 3> inv_spatial_metric,
-      const tnsr::II<DataVector, 3> minus_dt_conformal_metric,
-      const Mesh<3>& mesh,
-      const InverseJacobian<DataVector, 3, Frame::ElementLogical,
-                            Frame::Inertial>& inv_jacobian,
-      const Scalar<DataVector> trace_extrinsic_curvature_volume,
-      const tnsr::Ijj<DataVector, 3> spatial_christoffel_second_kind_volume,
-      const tnsr::I<DataVector, 3>& shift_excess_volume) const;
+      const tnsr::ii<DataVector, 3>& spatial_metric,
+      const tnsr::II<DataVector, 3>& inv_spatial_metric,
+      const tnsr::II<DataVector, 3>& minus_dt_conformal_metric) const;
+  // const Mesh<3>& mesh,
+  // const InverseJacobian<DataVector, 3, Frame::ElementLogical,
+  //                       Frame::Inertial>& inv_jacobian,
+  // const Scalar<DataVector>& trace_extrinsic_curvature_volume,
+  // const tnsr::Ijj<DataVector, 3>& spatial_christoffel_second_kind_volume,
+  // const tnsr::I<DataVector, 3>& shift_excess_volume) const;
 
   // NOLINTNEXTLINE(google-runtime-references)
   void pup(PUP::er& p) override;

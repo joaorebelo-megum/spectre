@@ -411,14 +411,14 @@ void ApparentHorizonForBwGW<ConformalGeometry>::apply(
     const tnsr::I<DataVector, 3>& x, const tnsr::i<DataVector, 3>& face_normal,
     const tnsr::ij<DataVector, 3>& deriv_unnormalized_face_normal,
     const Scalar<DataVector>& face_normal_magnitude,
-    const tnsr::ii<DataVector, 3> spatial_metric,
-    const tnsr::II<DataVector, 3> inv_spatial_metric,
-    const tnsr::II<DataVector, 3> minus_dt_conformal_metric,
+    const tnsr::ii<DataVector, 3>& spatial_metric,
+    const tnsr::II<DataVector, 3>& inv_spatial_metric,
+    const tnsr::II<DataVector, 3>& minus_dt_conformal_metric,
     const Mesh<3>& mesh,
     const InverseJacobian<DataVector, 3, Frame::ElementLogical,
                           Frame::Inertial>& inv_jacobian,
-    const Scalar<DataVector> trace_extrinsic_curvature_volume,
-    const tnsr::Ijj<DataVector, 3> spatial_christoffel_second_kind_volume,
+    const Scalar<DataVector>& trace_extrinsic_curvature_volume,
+    const tnsr::Ijj<DataVector, 3>& spatial_christoffel_second_kind_volume,
     const Scalar<DataVector>& lapse_times_conformal_factor_minus_one_volume,
     const tnsr::I<DataVector, 3>& shift_excess_volume) const {
   // Allocate temporary memory
@@ -599,15 +599,15 @@ void ApparentHorizonForBwGW<ConformalGeometry>::apply_linearized(
     const Scalar<DataVector>& conformal_factor_minus_one,
     const Scalar<DataVector>& lapse_times_conformal_factor_minus_one,
     const tnsr::I<DataVector, 3>& n_dot_longitudinal_shift_excess,
-    const tnsr::ii<DataVector, 3> spatial_metric,
-    const tnsr::II<DataVector, 3> inv_spatial_metric,
-    const tnsr::II<DataVector, 3> minus_dt_conformal_metric,
-    const Mesh<3>& mesh,
-    const InverseJacobian<DataVector, 3, Frame::ElementLogical,
-                          Frame::Inertial>& inv_jacobian,
-    const Scalar<DataVector> trace_extrinsic_curvature_volume,
-    const tnsr::Ijj<DataVector, 3> spatial_christoffel_second_kind_volume,
-    const tnsr::I<DataVector, 3>& shift_excess_volume) const {
+    const tnsr::ii<DataVector, 3>& spatial_metric,
+    const tnsr::II<DataVector, 3>& inv_spatial_metric,
+    const tnsr::II<DataVector, 3>& minus_dt_conformal_metric) const {
+  // const Mesh<3>& mesh,
+  // const InverseJacobian<DataVector, 3, Frame::ElementLogical,
+  //                       Frame::Inertial>& inv_jacobian,
+  // const Scalar<DataVector>& trace_extrinsic_curvature_volume,
+  // const tnsr::Ijj<DataVector, 3>& spatial_christoffel_second_kind_volume,
+  // const tnsr::I<DataVector, 3>& shift_excess_volume) const {
   // Compute shift excess on the surface points
   using analytic_tags =
       tmpl::list<Xcts::Tags::ShiftExcess<DataVector, 3, Frame::Inertial>>;
@@ -631,11 +631,12 @@ void ApparentHorizonForBwGW<ConformalGeometry>::apply_linearized(
   get(conformal_factor) = 1. + get(conformal_factor_minus_one);
   get(lapse) = (1. + get(lapse_times_conformal_factor_minus_one)) /
                get(conformal_factor);
+  /*
   auto& longitudinal_shift_excess_minus_dt_conformal_metric =
       get<::Tags::TempII<2, 3>>(buffer);
   auto& deriv_shift = get<::Tags::TempiJ<7, 3>>(buffer);
-  const auto deriv_shift_aux =
-      partial_derivative(shift_excess_volume, mesh, inv_jacobian);
+  //const auto deriv_shift_aux =
+  //    partial_derivative(shift_excess_volume, mesh, inv_jacobian);
   auto& trace_extrinsic_curvature = get<::Tags::TempScalar<8>>(buffer);
   auto& spatial_christoffel_second_kind = get<::Tags::TempIjj<9, 3>>(buffer);
   for (size_t k = 0; k < shift.get(0).size(); ++k) {
@@ -649,7 +650,7 @@ void ApparentHorizonForBwGW<ConformalGeometry>::apply_linearized(
               spatial_christoffel_second_kind.get(i, j, m)[k] =
                   spatial_christoffel_second_kind_volume.get(i, j, m)[l];
             }
-            deriv_shift.get(i, j)[k] = deriv_shift_aux.get(i, j)[l];
+            //deriv_shift.get(i, j)[k] = deriv_shift_aux.get(i, j)[l];
           }
         }
         get(trace_extrinsic_curvature)[k] =
@@ -658,6 +659,7 @@ void ApparentHorizonForBwGW<ConformalGeometry>::apply_linearized(
       }
     }
   }
+
   Xcts::longitudinal_operator(
       make_not_null(&longitudinal_shift_excess_minus_dt_conformal_metric),
       shift, deriv_shift, inv_spatial_metric, spatial_christoffel_second_kind);
@@ -684,6 +686,13 @@ void ApparentHorizonForBwGW<ConformalGeometry>::apply_linearized(
       deriv_unnormalized_face_normal, face_normal_magnitude, inv_spatial_metric,
       face_normal_raised, spatial_christoffel_second_kind, extrinsic_curvature,
       shift, lapse);
+  */
+  Scalar<DataVector>& expansion_of_solution =
+      get<::Tags::TempScalar<5>>(buffer);
+  Scalar<DataVector>& beta_orthogonal_correction =
+      get<::Tags::TempScalar<6>>(buffer);
+  get(beta_orthogonal_correction) = 0.;
+  get(expansion_of_solution) = 0.;
 
   // Shift
   {
@@ -702,10 +711,14 @@ void ApparentHorizonForBwGW<ConformalGeometry>::apply_linearized(
     }
   }
   // Conformal factor
+  /*
   normal_gradient_term(n_dot_conformal_factor_gradient_correction, face_normal,
                        face_normal_raised, deriv_unnormalized_face_normal,
                        face_normal_magnitude, inv_spatial_metric,
                        spatial_christoffel_second_kind);
+  */
+  get(*n_dot_conformal_factor_gradient_correction) = 0.;
+
   get(*n_dot_conformal_factor_gradient_correction) *=
       -0.25 * get(*conformal_factor_correction);
   get(*n_dot_conformal_factor_gradient_correction) -=
@@ -724,9 +737,9 @@ void ApparentHorizonForBwGW<ConformalGeometry>::apply_linearized(
     normal_dot_flux(make_not_null(&nn_dot_longitudinal_shift), face_normal,
                     n_dot_longitudinal_shift);
     get(*n_dot_conformal_factor_gradient_correction) +=
-        -0.5 * get(trace_extrinsic_curvature) *
+        /*-0.5 * get(trace_extrinsic_curvature) *
             square(get(conformal_factor_minus_one) + 1.) *
-            get(*conformal_factor_correction) +
+            get(*conformal_factor_correction) +*/
         0.5 * pow<3>(get(conformal_factor_minus_one) + 1.) /
             (get(lapse_times_conformal_factor_minus_one) + 1.) *
             get(nn_dot_longitudinal_shift) * get(*conformal_factor_correction) -
