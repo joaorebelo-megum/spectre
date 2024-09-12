@@ -1883,8 +1883,8 @@ BinaryWithGravitationalWavesVariables<DataType>::get_t_shift(DataType t) const {
       gr::shift(spacetime_metric_right, inv_conformal_metric_right);
   const auto lapse_right = gr::lapse(shift_right, spacetime_metric_right);
   for (size_t i = 0; i < 3; ++i) {
-    shift_t.get(i) = shift_left.get(i) * get(lapse_right) +
-                     shift_right.get(i) * get(lapse_left);
+    shift_t.get(i) = shift_left.get(i) +  //* get(lapse_right) +
+                     shift_right.get(i);  //* get(lapse_left);
   }
   return shift_t;
 }
@@ -2325,27 +2325,7 @@ tnsr::aa<DataType, 3> BinaryWithGravitationalWavesVariables<
     superposed_spacetime_metric.get(i, i) -= 1.;
   }
 
-  // Lapse correction
-  /*
-  const auto spatial_metric_left = gr::spatial_metric(spacetime_metric_left);
-  const auto inv_spatial_metric_left =
-      determinant_and_inverse(spatial_metric_left).second;
-  const auto shift_left =
-      gr::shift(spacetime_metric_left, inv_spatial_metric_left);
-  const auto shift_left_down =
-      raise_or_lower_index(shift_left, spatial_metric_left);
-  const auto spatial_metric_right = gr::spatial_metric(spacetime_metric_right);
-  const auto inv_spatial_metric_right =
-      determinant_and_inverse(spatial_metric_right).second;
-  const auto shift_right =
-      gr::shift(spacetime_metric_right, inv_spatial_metric_right);
-  const auto shift_right_down =
-      raise_or_lower_index(shift_right, spatial_metric_right);
-  */
-  superposed_spacetime_metric.get(0, 0) +=
-      2.;  // +
-           //  get(dot_product(shift_left, shift_right_down)) +
-           //  get(dot_product(shift_right, shift_left_down));
+  superposed_spacetime_metric.get(0, 0) += 2.;
 
   return superposed_spacetime_metric;
 }
