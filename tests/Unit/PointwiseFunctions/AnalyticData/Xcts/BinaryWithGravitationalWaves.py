@@ -9020,9 +9020,9 @@ def integral_term(x):
             fl_left = lambda t: f_left(t, i, j, x)
             fl_right = lambda t: f_right(t, i, j, x)
             integral_term_aux[i, j] = integrate.romberg(
-                fl_left, retarded_time_left(x), 0.0, tol=1e-7
+                fl_left, retarded_time_left(x), 0.0, tol=1e-6
             ) + integrate.romberg(
-                fl_right, retarded_time_right(x), 0.0, tol=1e-7
+                fl_right, retarded_time_right(x), 0.0, tol=1e-6
             )
     return integral_term_aux
 
