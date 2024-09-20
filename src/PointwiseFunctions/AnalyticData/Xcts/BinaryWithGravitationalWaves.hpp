@@ -192,7 +192,7 @@ struct BinaryWithGravitationalWavesVariables
       const std::array<std::vector<double>, 3>& local_past_dt_momentum_left,
       const std::array<std::vector<double>, 3>& local_past_dt_momentum_right,
       const std::vector<double>& local_past_time)
-      : Base(local_mesh, local_inv_jacobian),
+      : Base(std::move(local_mesh), std::move(local_inv_jacobian)),
         mesh(std::move(local_mesh)),
         inv_jacobian(std::move(local_inv_jacobian)),
         x(local_x),
@@ -347,7 +347,7 @@ struct BinaryWithGravitationalWavesVariables
                       DataType, Dim, Frame::Inertial> /*meta*/) const override;
   void operator()(
       gsl::not_null<tnsr::iJ<DataType, Dim>*> deriv_shift_background,
-      gsl::not_null<Cache*> /*cache*/,
+      gsl::not_null<Cache*> cache,
       ::Tags::deriv<Xcts::Tags::ShiftBackground<DataType, Dim, Frame::Inertial>,
                     tmpl::size_t<Dim>, Frame::Inertial> /*meta*/) const;
   void operator()(
@@ -578,6 +578,29 @@ struct BinaryWithGravitationalWavesVariables
  *
  * \warning The class is still being worked on. The Solver was not tested yet,
  * for now we still see a very slow convergence.
+ *
+ * To be able to calculate equations \f$\eqref{eq:retarded_term}\f$ and
+ * \f$\eqref{eq:integral_term}\f$ we need to look into the past history
+ * of the binary at least up to the time were the generated wave can reach the
+ * furthest point on the grid. To do so we must evolve the binary backward in
+ * time. Because we are only looking into the inspiral phase we can follow a
+ * simple Hamiltonian evolution computed in Post-Newtonian orders. The
+ * equations to be solved are
+ *
+ * \f{equation}{
+ * \frac{d X^i}{d t}=\frac{\partial H}{\partial P_i}
+ * \f}
+ *
+ * and
+ *
+ * \f{equation}{
+ * \frac{d P_i}{d t}=-\frac{\partial H}{\partial X^i}+F_i,
+ * \f}
+ *
+ * where $H$ is the Post-Newtonian Hamiltonian, $X^i$ is the separation
+ * vector between the two particles, $P_i$ is the momentum of one particle
+ * in the center of mass frame and $F_i$ is the radiation-reaction flux term.
+ * The Post-Newtonian Hamiltonian is given in \cite Buonanno2005xu.
  */
 class BinaryWithGravitationalWaves
     : public elliptic::analytic_data::Background,
@@ -822,10 +845,10 @@ class BinaryWithGravitationalWaves
 
   void initialize();
 
-  typedef std::array<double, 6> state_type;
+  using state_type = std::array<double, 6>;
 
   // Hamiltonian system
-  void hamiltonian_system(const state_type& x, state_type& dpdt);
+  void hamiltonian_system(const state_type& x, state_type& dpdt) const;
 
   // Observer: store state in vectors
   void observer_vector(const state_type& x, double t);
