@@ -1896,8 +1896,8 @@ BinaryWithGravitationalWavesVariables<DataType>::get_t_shift(DataType t) const {
       gr::shift(spacetime_metric_right, inv_conformal_metric_right);
   const auto lapse_right = gr::lapse(shift_right, spacetime_metric_right);
   for (size_t i = 0; i < 3; ++i) {
-    shift_t.get(i) = shift_left.get(i) +  //* get(lapse_right) +
-                     shift_right.get(i);  //* get(lapse_left);
+    shift_t.get(i) = shift_left.get(i) +  // * get(lapse_right) +
+                     shift_right.get(i);  // * get(lapse_left);
   }
   return shift_t;
 }
