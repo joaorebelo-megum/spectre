@@ -1818,10 +1818,10 @@ template <typename DataType>
 tnsr::I<DataType, 3>
 BinaryWithGravitationalWavesVariables<DataType>::get_t_shift(DataType t) const {
   tnsr::I<DataType, 3> shift_t{t.size()};
-  //std::fill(shift_t.begin(), shift_t.end(), 0.);
+  std::fill(shift_t.begin(), shift_t.end(), 0.);
 
-  // PN shift
-  /*
+  // PN shift (added in wave zone)
+
   DataType present_time(get_size(get<0>(x)), max_time_interpolator);
   const auto distance_left_t = get_t_distance_left(present_time);
   const auto distance_right_t = get_t_distance_right(present_time);
@@ -1847,7 +1847,18 @@ BinaryWithGravitationalWavesVariables<DataType>::get_t_shift(DataType t) const {
         0.5 * momentum_left_t.get(i) / get(distance_left_t) +
         0.5 * momentum_right_t.get(i) / get(distance_right_t);
   }
-  */
+
+  double turn_off = .5;
+  if (attenuation_parameter == 0) {
+    turn_off = 1.;
+  }
+  for (size_t i = 0; i < 3; ++i) {
+    shift_t.get(i) *=
+        (turn_off + .5 * tanh(attenuation_parameter *
+                              (get(distance_left_t) - attenuation_radius))) *
+        (turn_off + .5 * tanh(attenuation_parameter *
+                              (get(distance_right_t) - attenuation_radius)));
+  }
 
   // Horizon Penetrating shift
   /*
@@ -1896,8 +1907,8 @@ BinaryWithGravitationalWavesVariables<DataType>::get_t_shift(DataType t) const {
       gr::shift(spacetime_metric_right, inv_conformal_metric_right);
   const auto lapse_right = gr::lapse(shift_right, spacetime_metric_right);
   for (size_t i = 0; i < 3; ++i) {
-    shift_t.get(i) = shift_left.get(i) +  // * get(lapse_right) +
-                     shift_right.get(i);  // * get(lapse_left);
+    shift_t.get(i) += shift_left.get(i) +  // * get(lapse_right) +
+                      shift_right.get(i);  // * get(lapse_left);
   }
   return shift_t;
 }
