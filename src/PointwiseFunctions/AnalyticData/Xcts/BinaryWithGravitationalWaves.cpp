@@ -1821,7 +1821,7 @@ BinaryWithGravitationalWavesVariables<DataType>::get_t_shift(DataType t) const {
   std::fill(shift_t.begin(), shift_t.end(), 0.);
 
   // PN shift (added in wave zone)
-
+  /*
   DataType present_time(get_size(get<0>(x)), max_time_interpolator);
   const auto distance_left_t = get_t_distance_left(present_time);
   const auto distance_right_t = get_t_distance_right(present_time);
@@ -1859,7 +1859,7 @@ BinaryWithGravitationalWavesVariables<DataType>::get_t_shift(DataType t) const {
         (turn_off + .5 * tanh(attenuation_parameter *
                               (get(distance_right_t) - attenuation_radius)));
   }
-
+  */
   // Horizon Penetrating shift
   /*
   DataType present_time(get_size(get<0>(x)), max_time_interpolator);
