@@ -356,14 +356,19 @@ void BinaryWithGravitationalWavesVariables<DataType>::operator()(
   DataType time_back(get(trace_extrinsic_curvature).size(), -time_displacement);
   DataType time_back_two(get(trace_extrinsic_curvature).size(),
                          -2. * time_displacement);
+  DataType time_back_three(get(trace_extrinsic_curvature).size(),
+                           -3. * time_displacement);
   Scalar<DataType> trace_extrinsic_curvature_back;
   Scalar<DataType> trace_extrinsic_curvature_back_two;
+  Scalar<DataType> trace_extrinsic_curvature_back_three;
   ASSERT(mesh.has_value() and inv_jacobian.has_value(),
          "Need a mesh and a Jacobian for numeric differentiation.");
   if constexpr (std::is_same_v<DataType, DataVector>) {
     trace_extrinsic_curvature_back = get_t_trace_extrinsic_curvature(time_back);
     trace_extrinsic_curvature_back_two =
         get_t_trace_extrinsic_curvature(time_back_two);
+    trace_extrinsic_curvature_back_three =
+        get_t_trace_extrinsic_curvature(time_back_three);
   } else {
     (void)dt_trace_extrinsic_curvature;
     (void)cache;
@@ -371,12 +376,21 @@ void BinaryWithGravitationalWavesVariables<DataType>::operator()(
         "Numeric differentiation only works with DataVectors because it needs "
         "a grid.");
   }
-
+  // Second order
+  /*
   get(*dt_trace_extrinsic_curvature) =
       (3. * get(trace_extrinsic_curvature) -
        4. * get(trace_extrinsic_curvature_back) +
        get(trace_extrinsic_curvature_back_two)) /
       (2. * time_displacement);
+  */
+  // Third order
+  get(*dt_trace_extrinsic_curvature) =
+      (11. * get(trace_extrinsic_curvature) -
+       18. * get(trace_extrinsic_curvature_back) +
+       9. * get(trace_extrinsic_curvature_back_two) -
+       2. * get(trace_extrinsic_curvature_back_three)) /
+      (6. * time_displacement);
 }
 
 template <typename DataType>
@@ -504,16 +518,29 @@ void BinaryWithGravitationalWavesVariables<DataType>::operator()(
   double time_displacement = 0.01;
   DataType time_back(get_size(x.get(0)), -time_displacement);
   DataType time_back_two(get_size(x.get(0)), -2. * time_displacement);
+  DataType time_back_three(get_size(x.get(0)), -3. * time_displacement);
   const auto conformal_metric_back = get_t_conformal_metric(time_back);
   const auto conformal_metric_back_two = get_t_conformal_metric(time_back_two);
+  const auto conformal_metric_back_three =
+      get_t_conformal_metric(time_back_three);
 
   tnsr::ii<DataType, 3> dt_conformal_metric{get_size(x.get(0))};
   for (size_t i = 0; i < 3; ++i) {
     for (size_t j = 0; j <= i; ++j) {
+      // Second order
+      /*
       dt_conformal_metric.get(i, j) = (3. * conformal_metric.get(i, j) -
                                        4. * conformal_metric_back.get(i, j) +
                                        conformal_metric_back_two.get(i, j)) /
                                       (2. * time_displacement);
+      */
+      // Third order
+      dt_conformal_metric.get(i, j) =
+          (11. * conformal_metric.get(i, j) -
+           18. * conformal_metric_back.get(i, j) +
+           9. * conformal_metric_back_two.get(i, j) -
+           2. * conformal_metric_back_three.get(i, j)) /
+          (6. * time_displacement);
     }
   }
 
@@ -1271,20 +1298,33 @@ Scalar<DataType> BinaryWithGravitationalWavesVariables<
   double time_displacement = 0.01;
   DataType time_back(get_size(x.get(0)), t[0] - time_displacement);
   DataType time_back_two(get_size(x.get(0)), t[0] - 2. * time_displacement);
+  DataType time_back_three(get_size(x.get(0)), t[0] - 3. * time_displacement);
   const auto conformal_metric = get_t_conformal_metric(t);
   const auto inv_conformal_metric =
       determinant_and_inverse(conformal_metric).second;
   const auto conformal_metric_back = get_t_conformal_metric(time_back);
   const auto conformal_metric_back_two = get_t_conformal_metric(time_back_two);
+  const auto conformal_metric_back_three =
+      get_t_conformal_metric(time_back_three);
   const auto lapse = get_t_lapse(t);
 
   for (size_t i = 0; i < 3; ++i) {
     for (size_t j = 0; j <= i; ++j) {
+      // Second order
+      /*
       extrinsic_curvature.get(i, j) +=
           (3. * conformal_metric.get(i, j) -
            4. * conformal_metric_back.get(i, j) +
            conformal_metric_back_two.get(i, j)) /
           (2. * time_displacement * (-2.) * get(lapse));
+      */
+      // Third order
+      extrinsic_curvature.get(i, j) +=
+          (11. * conformal_metric.get(i, j) -
+           18. * conformal_metric_back.get(i, j) +
+           9. * conformal_metric_back_two.get(i, j) -
+           2. * conformal_metric_back_three.get(i, j)) /
+          (6. * time_displacement * (-2.) * get(lapse));
     }
   }
 
@@ -1821,7 +1861,7 @@ BinaryWithGravitationalWavesVariables<DataType>::get_t_shift(DataType t) const {
   std::fill(shift_t.begin(), shift_t.end(), 0.);
 
   // PN shift (in wave zone)
-
+  /*
   DataType present_time(get_size(get<0>(x)), max_time_interpolator);
   const auto distance_left_t = get_t_distance_left(present_time);
   const auto distance_right_t = get_t_distance_right(present_time);
@@ -1859,7 +1899,7 @@ BinaryWithGravitationalWavesVariables<DataType>::get_t_shift(DataType t) const {
         (turn_off + .5 * tanh(attenuation_parameter *
                               (get(distance_right_t) - attenuation_radius)));
   }
-
+  */
   // Horizon Penetrating shift
   /*
   DataType present_time(get_size(get<0>(x)), max_time_interpolator);
@@ -1908,12 +1948,14 @@ BinaryWithGravitationalWavesVariables<DataType>::get_t_shift(DataType t) const {
   const auto lapse_right = gr::lapse(shift_right, spacetime_metric_right);
   for (size_t i = 0; i < 3; ++i) {
     shift_t.get(i) +=
+        /*
         (1. -
          (turn_off + .5 * tanh(attenuation_parameter *
                                (get(distance_left_t) - attenuation_radius))) *
              (turn_off +
               .5 * tanh(attenuation_parameter *
                         (get(distance_right_t) - attenuation_radius)))) *
+        */
         (shift_left.get(i) +   // * get(lapse_right) +
          shift_right.get(i));  // * get(lapse_left);
   }
