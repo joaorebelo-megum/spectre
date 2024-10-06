@@ -352,7 +352,7 @@ void BinaryWithGravitationalWavesVariables<DataType>::operator()(
     ::Tags::dt<gr::Tags::TraceExtrinsicCurvature<DataType>> /*meta*/) const {
   const auto& trace_extrinsic_curvature =
       cache->get_var(*this, gr::Tags::TraceExtrinsicCurvature<DataType>{});
-  double time_displacement = 0.1;
+  double time_displacement = 0.01;
   DataType time_back(get(trace_extrinsic_curvature).size(), -time_displacement);
   DataType time_back_two(get(trace_extrinsic_curvature).size(),
                          -2. * time_displacement);
@@ -501,7 +501,7 @@ void BinaryWithGravitationalWavesVariables<DataType>::operator()(
   const auto& inv_conformal_metric = cache->get_var(
       *this,
       ::Xcts::Tags::InverseConformalMetric<DataType, Dim, Frame::Inertial>{});
-  double time_displacement = 0.1;
+  double time_displacement = 0.01;
   DataType time_back(get_size(x.get(0)), -time_displacement);
   DataType time_back_two(get_size(x.get(0)), -2. * time_displacement);
   const auto conformal_metric_back = get_t_conformal_metric(time_back);
@@ -1268,7 +1268,7 @@ Scalar<DataType> BinaryWithGravitationalWavesVariables<
   tnsr::ii<DataType, 3> extrinsic_curvature{t.size()};
   std::fill(extrinsic_curvature.begin(), extrinsic_curvature.end(), 0.);
 
-  double time_displacement = 0.1;
+  double time_displacement = 0.01;
   DataType time_back(get_size(x.get(0)), t[0] - time_displacement);
   DataType time_back_two(get_size(x.get(0)), t[0] - 2. * time_displacement);
   const auto conformal_metric = get_t_conformal_metric(t);
@@ -1820,8 +1820,8 @@ BinaryWithGravitationalWavesVariables<DataType>::get_t_shift(DataType t) const {
   tnsr::I<DataType, 3> shift_t{t.size()};
   std::fill(shift_t.begin(), shift_t.end(), 0.);
 
-  // PN shift (added in wave zone)
-  /*
+  // PN shift (in wave zone)
+
   DataType present_time(get_size(get<0>(x)), max_time_interpolator);
   const auto distance_left_t = get_t_distance_left(present_time);
   const auto distance_right_t = get_t_distance_right(present_time);
@@ -1859,7 +1859,7 @@ BinaryWithGravitationalWavesVariables<DataType>::get_t_shift(DataType t) const {
         (turn_off + .5 * tanh(attenuation_parameter *
                               (get(distance_right_t) - attenuation_radius)));
   }
-  */
+
   // Horizon Penetrating shift
   /*
   DataType present_time(get_size(get<0>(x)), max_time_interpolator);
@@ -1907,8 +1907,15 @@ BinaryWithGravitationalWavesVariables<DataType>::get_t_shift(DataType t) const {
       gr::shift(spacetime_metric_right, inv_conformal_metric_right);
   const auto lapse_right = gr::lapse(shift_right, spacetime_metric_right);
   for (size_t i = 0; i < 3; ++i) {
-    shift_t.get(i) += shift_left.get(i) +  // * get(lapse_right) +
-                      shift_right.get(i);  // * get(lapse_left);
+    shift_t.get(i) +=
+        (1. -
+         (turn_off + .5 * tanh(attenuation_parameter *
+                               (get(distance_left_t) - attenuation_radius))) *
+             (turn_off +
+              .5 * tanh(attenuation_parameter *
+                        (get(distance_right_t) - attenuation_radius)))) *
+        (shift_left.get(i) +   // * get(lapse_right) +
+         shift_right.get(i));  // * get(lapse_left);
   }
   return shift_t;
 }
@@ -2413,7 +2420,7 @@ void BinaryWithGravitationalWaves::initialize() {
   initial_state_position = {{separation / total_mass, 0., 0.}};
   initial_state_momentum = {{0., ymomentum_right_ / reduced_mass, 0.}};
 
-  time_step = .1;
+  time_step = .01;
   initial_time = 0.;
   final_time = std::round(-2 * outer_radius() / time_step) * time_step;
   number_of_steps =
