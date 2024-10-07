@@ -820,7 +820,7 @@ BinaryWithGravitationalWavesVariables<DataType>::find_retarded_time_left(
 
         return get(magnitude(v)) + time - t0[i];
       },
-      bracket_lower, bracket_upper, 1e-8, 1e-10);
+      bracket_lower, bracket_upper, 1e-12, 1e-14);
 }
 
 template <typename DataType>
@@ -839,7 +839,7 @@ BinaryWithGravitationalWavesVariables<DataType>::find_retarded_time_right(
 
         return get(magnitude(v)) + time - t0[i];
       },
-      bracket_lower, bracket_upper, 1e-8, 1e-10);
+      bracket_lower, bracket_upper, 1e-12, 1e-14);
 }
 
 template <typename DataType>
@@ -865,7 +865,7 @@ BinaryWithGravitationalWavesVariables<DataType>::find_areal_distance_left(
 
         return iso_radius - r[i];
       },
-      bracket_lower, bracket_upper, 1e-8, 1e-10);
+      bracket_lower, bracket_upper, 1e-12, 1e-14);
 }
 
 template <typename DataType>
@@ -891,7 +891,7 @@ BinaryWithGravitationalWavesVariables<DataType>::find_areal_distance_right(
 
         return iso_radius - r[i];
       },
-      bracket_lower, bracket_upper, 1e-8, 1e-10);
+      bracket_lower, bracket_upper, 1e-12, 1e-14);
 }
 
 template <typename DataType>
@@ -1031,7 +1031,7 @@ DataType BinaryWithGravitationalWavesVariables<DataType>::integrate_term(
   }
   const integration::GslQuadAdaptive<
       integration::GslIntegralType::StandardGaussKronrod>
-      integration{10};
+      integration{20};
   for (size_t k = 0; k < x.get(0).size(); ++k) {
     auto integrand =
         [this, i, j, k, &this_interpolation_position,
@@ -1136,7 +1136,7 @@ DataType BinaryWithGravitationalWavesVariables<DataType>::integrate_term(
                    this_normal_at_t.at(i) * this_normal_at_t.at(j));
           return term1 + term2 + term3 + term4;
         };
-    result[k] = integration(integrand, time[k], t0, 1., 0, 1e-8);
+    result[k] = integration(integrand, time[k], t0, 1e-3, 0, 0.);
   }
   return result;
 }
