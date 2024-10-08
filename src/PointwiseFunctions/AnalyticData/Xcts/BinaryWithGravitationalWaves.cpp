@@ -4,6 +4,8 @@
 #include "PointwiseFunctions/AnalyticData/Xcts/BinaryWithGravitationalWaves.hpp"
 
 #include <boost/math/interpolators/cubic_hermite.hpp>
+#include <boost/math/quadrature/gauss_kronrod.hpp>
+#include <boost/math/quadrature/trapezoidal.hpp>
 #include <cstddef>
 
 #include "DataStructures/BoostMultiArray.hpp"
@@ -1029,9 +1031,11 @@ DataType BinaryWithGravitationalWavesVariables<DataType>::integrate_term(
       this_mass = mass_right;
     }
   }
-  const integration::GslQuadAdaptive<
-      integration::GslIntegralType::StandardGaussKronrod>
-      integration{20};
+  // const integration::GslQuadAdaptive<
+  //     integration::GslIntegralType::StandardGaussKronrod>
+  //     integration{20};
+  // using namespace boost::math::quadrature;
+  using boost::math::quadrature::trapezoidal;
   for (size_t k = 0; k < x.get(0).size(); ++k) {
     auto integrand =
         [this, i, j, k, &this_interpolation_position,
@@ -1136,7 +1140,11 @@ DataType BinaryWithGravitationalWavesVariables<DataType>::integrate_term(
                    this_normal_at_t.at(i) * this_normal_at_t.at(j));
           return term1 + term2 + term3 + term4;
         };
-    result[k] = integration(integrand, time[k], t0, 1e-3, 0, 0.);
+    // result[k] = integration(integrand, time[k], t0, 1e-3, 0, 0.);
+    // double error;
+    // result[k] = gauss_kronrod<double, 15>::integrate(integrand, time[k],
+    //              t0, 5, 1e-4, &error);
+    result[k] = trapezoidal(integrand, time[k], t0, 1e-8, 8);
   }
   return result;
 }
@@ -1799,6 +1807,7 @@ template <typename DataType>
 Scalar<DataType> BinaryWithGravitationalWavesVariables<DataType>::get_t_lapse(
     DataType t) const {
   Scalar<DataType> lapse_t{t.size()};
+  std::fill(lapse_t.begin(), lapse_t.end(), 0.);
 
   // PN Lapse
   /*
@@ -1806,7 +1815,35 @@ Scalar<DataType> BinaryWithGravitationalWavesVariables<DataType>::get_t_lapse(
   get(lapse_t) = (2. - get(conformal_factor_t)) /
   get(conformal_factor_t);
   */
-
+  /*
+   const auto distance_left_t = get_t_distance_left(t);
+   const auto distance_right_t = get_t_distance_right(t);
+   const auto separation_t = get_t_separation(t);
+   const auto momentum_left_t = get_t_momentum_left(t);
+   const auto momentum_right_t = get_t_momentum_right(t);
+   get(lapse_t) =
+       1 - mass_left / get(distance_left_t) -
+       mass_right / get(distance_right_t) +
+       (mass_left * mass_right) /
+           (get(distance_left_t) * get(distance_right_t)) +
+       (mass_left * mass_right) / (get(distance_left_t) * get(separation_t)) +
+       (mass_left * mass_right) / (get(distance_right_t) * get(separation_t)) +
+       0.5 * (square(mass_left / get(distance_left_t)) +
+              square(mass_right / get(distance_right_t)) -
+              3. * (get(dot_product(momentum_left_t, momentum_left_t)) /
+                        (get(distance_left_t) * mass_left) +
+                    get(dot_product(momentum_right_t, momentum_right_t)) /
+                        (get(distance_right_t) * mass_right)));
+   double turn_off = .5;
+   if (attenuation_parameter == 0) {
+     turn_off = 1.;
+   }
+   get(lapse_t) *=
+       (turn_off + .5 * tanh(attenuation_parameter *
+                             (get(distance_left_t) - attenuation_radius))) *
+       (turn_off + .5 * tanh(attenuation_parameter *
+                             (get(distance_right_t) - attenuation_radius)));
+   */
   // Horizon Penetrating Lapse
   /*
   const auto distance_left_t = get_t_distance_left(t);
@@ -1850,7 +1887,16 @@ Scalar<DataType> BinaryWithGravitationalWavesVariables<DataType>::get_t_lapse(
       gr::shift(spacetime_metric_right, inv_conformal_metric_right);
   const auto lapse_right = gr::lapse(shift_right, spacetime_metric_right);
   // get(lapse_t) = get(lapse_left) + get(lapse_right) - 1.;
-  get(lapse_t) = get(lapse_left) * get(lapse_right);
+  get(lapse_t) +=
+      /*
+      (1. -
+       (turn_off + .5 * tanh(attenuation_parameter *
+                             (get(distance_left_t) - attenuation_radius))) *
+           (turn_off +
+            .5 * tanh(attenuation_parameter *
+                      (get(distance_right_t) - attenuation_radius)))) *
+      */
+      get(lapse_left) * get(lapse_right);
   return lapse_t;
 }
 
