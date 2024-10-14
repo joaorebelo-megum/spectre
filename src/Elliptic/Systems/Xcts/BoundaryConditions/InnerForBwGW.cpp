@@ -153,19 +153,28 @@ void InnerForBwGW<ConformalGeometry>::apply_linearized(
         lapse_times_conformal_factor_correction,
     const gsl::not_null<tnsr::I<DataVector, 3>*> shift_excess_correction,
     const gsl::not_null<Scalar<DataVector>*>
-    /*n_dot_conformal_factor_gradient_correction*/,
+        n_dot_conformal_factor_gradient_correction,
     const gsl::not_null<Scalar<DataVector>*>
-    /*n_dot_lapse_times_conformal_factor_gradient_correction*/,
+        n_dot_lapse_times_conformal_factor_gradient_correction,
     const gsl::not_null<tnsr::I<DataVector, 3>*>
-    /*n_dot_longitudinal_shift_excess_correction*/,
+        n_dot_longitudinal_shift_excess_correction,
     const tnsr::i<DataVector, 3>& /*deriv_conformal_factor_correction*/,
     const tnsr::i<DataVector, 3>&
     /*deriv_lapse_times_conformal_factor_correction*/,
-    const tnsr::iJ<DataVector, 3>& /*deriv_shift_excess_correction*/) const {
-  get(*conformal_factor_correction) = 0.;
-  get(*lapse_times_conformal_factor_correction) = 0.;
-  std::fill(shift_excess_correction->begin(), shift_excess_correction->end(),
-            0.);
+    const tnsr::iJ<DataVector, 3>& /*deriv_shift_excess_correction*/,
+    const tnsr::I<DataVector, 3>& x,
+    const tnsr::i<DataVector, 3>& face_normal) const {
+  if (boundary_ == elliptic::BoundaryConditionType::Dirichlet) {
+    get(*conformal_factor_correction) = 0.;
+    get(*lapse_times_conformal_factor_correction) = 0.;
+    std::fill(shift_excess_correction->begin(), shift_excess_correction->end(),
+              0.);
+  } else if (boundary_ == elliptic::BoundaryConditionType::Neumann) {
+    implement_apply_neumann<ConformalGeometry>(
+        n_dot_conformal_factor_gradient_correction,
+        n_dot_lapse_times_conformal_factor_gradient_correction,
+        n_dot_longitudinal_shift_excess_correction, solution_, x, face_normal);
+  }
 }
 
 template <Xcts::Geometry ConformalGeometry>
