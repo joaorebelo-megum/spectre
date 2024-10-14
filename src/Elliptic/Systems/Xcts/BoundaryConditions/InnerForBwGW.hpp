@@ -126,8 +126,7 @@ class InnerForBwGW : public elliptic::BoundaryConditions::BoundaryCondition<3> {
 
   using argument_tags =
       tmpl::list<domain::Tags::Coordinates<3, Frame::Inertial>,
-                 ::Tags::Normalized<
-                     domain::Tags::UnnormalizedFaceNormal<3, Frame::Inertial>>>;
+                 domain::Tags::FaceNormal<3, Frame::Inertial>>;
   using volume_tags = tmpl::list<>;
 
   void apply(
@@ -145,7 +144,9 @@ class InnerForBwGW : public elliptic::BoundaryConditions::BoundaryCondition<3> {
       const tnsr::I<DataVector, 3>& x,
       const tnsr::i<DataVector, 3>& face_normal) const;
 
-  using argument_tags_linearized = tmpl::list<>;
+  using argument_tags_linearized =
+      tmpl::list<domain::Tags::Coordinates<3, Frame::Inertial>,
+                 domain::Tags::FaceNormal<3, Frame::Inertial>>;
   using volume_tags_linearized = tmpl::list<>;
 
   void apply_linearized(
