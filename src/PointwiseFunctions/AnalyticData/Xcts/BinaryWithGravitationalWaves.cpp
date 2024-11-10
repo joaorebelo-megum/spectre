@@ -1249,7 +1249,36 @@ BinaryWithGravitationalWavesVariables<DataType>::get_t_conformal_metric(
   const auto superposed_spacetime_metric_t =
       get_t_superposed_spacetime_metric(t);
   auto conformal_metric = gr::spatial_metric(superposed_spacetime_metric_t);
+
+  // PN conformal metric
+  /*
+  const auto separation_t = get_t_separation(t);
+  const auto distance_left_t = get_t_distance_left(t);
+  const auto distance_right_t = get_t_distance_right(t);
+  const auto momentum_left_t = get_t_momentum_left(t);
+  const auto momentum_right_t = get_t_momentum_right(t);
+  const DataType E_left_t =
+      mass_left +
+      get(dot_product(momentum_left_t, momentum_left_t)) /
+          (2. * mass_left) -
+      mass_left * mass_right / (2. * get(separation_t));
+  const DataType E_right_t =
+      mass_right +
+      get(dot_product(momentum_right_t, momentum_right_t)) /
+          (2. * mass_right) -
+      mass_left * mass_right / (2. * get(separation_t));
+  const auto pn_conformal_factor_t =
+      1. + E_left_t / (2. * get(distance_left_t)) +
+      E_right_t / (2. * get(distance_right_t));
+  tnsr::ii<DataType, 3> conformal_metric{t.size()};
+  std::fill(conformal_metric.begin(), conformal_metric.end(), 0.);
+  */
   for (size_t i = 0; i < 3; ++i) {
+    /*
+    conformal_metric.get(i,i) =
+           pn_conformal_factor_t * pn_conformal_factor_t *
+           pn_conformal_factor_t * pn_conformal_factor_t;
+    */
     for (size_t j = 0; j <= i; ++j) {
       conformal_metric.get(i, j) +=
           radiative_term.get(i, j) /
