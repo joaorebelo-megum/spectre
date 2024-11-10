@@ -378,14 +378,6 @@ void BinaryWithGravitationalWavesVariables<DataType>::operator()(
         "Numeric differentiation only works with DataVectors because it needs "
         "a grid.");
   }
-  // Second order
-  /*
-  get(*dt_trace_extrinsic_curvature) =
-      (3. * get(trace_extrinsic_curvature) -
-       4. * get(trace_extrinsic_curvature_back) +
-       get(trace_extrinsic_curvature_back_two)) /
-      (2. * time_displacement);
-  */
   // Third order
   get(*dt_trace_extrinsic_curvature) =
       (11. * get(trace_extrinsic_curvature) -
@@ -401,85 +393,6 @@ void BinaryWithGravitationalWavesVariables<DataType>::operator()(
     const gsl::not_null<Cache*> /*cache*/,
     Xcts::Tags::ShiftBackground<DataType, 3, Frame::Inertial> /*meta*/) const {
   std::fill(shift_background->begin(), shift_background->end(), 0.);
-  // PN shift
-  /*
-  DataType present_time(get_size(get<0>(x)), max_time_interpolator);
-  const auto distance_left_t = get_t_distance_left(present_time);
-  const auto distance_right_t = get_t_distance_right(present_time);
-  const auto separation_t = get_t_separation(present_time);
-  const auto momentum_left_t = get_t_momentum_left(present_time);
-  const auto momentum_right_t = get_t_momentum_right(present_time);
-  const auto normal_left_t = get_t_normal_left(present_time);
-  const auto normal_right_t = get_t_normal_right(present_time);
-  for (size_t i = 0; i < 3; ++i) {
-    shift_background->get(i) -=
-        4. * (momentum_left_t.get(i) / get(distance_left_t) +
-              momentum_right_t.get(i) / get(distance_right_t));
-    for (size_t j = 0; j < 3; ++j) {
-      shift_background->get(i) +=
-          .5 * momentum_left_t.get(j) *
-              (-normal_left_t.get(i) * normal_left_t.get(j) /
-               get(distance_left_t)) +
-          .5 * momentum_right_t.get(j) *
-              (-normal_right_t.get(i) * normal_right_t.get(j) /
-               get(distance_right_t));
-    }
-    shift_background->get(i) +=
-        0.5 * momentum_left_t.get(i) / get(distance_left_t) +
-        0.5 * momentum_right_t.get(i) / get(distance_right_t);
-  }
-  */
-  // Horizon Penetrating Shift
-  /*
-  DataType present_time(get_size(get<0>(x)), max_time_interpolator);
-  const auto distance_left_t = get_t_distance_left(present_time);
-  const auto distance_right_t = get_t_distance_right(present_time);
-  const auto areal_distance_left =
-      find_areal_distance_left(get(distance_left_t));
-  const auto areal_distance_right =
-      find_areal_distance_right(get(distance_right_t));
-  const auto normal_left = get_t_normal_left(present_time);
-  const auto normal_right = get_t_normal_right(present_time);
-  const DataType shift_r_left = .75 * sqrt(3) * square(mass_left) *
-                                get(distance_left_t) /
-                                pow(areal_distance_left, 3);
-  const DataType shift_r_right = .75 * sqrt(3) * square(mass_right) *
-                                 get(distance_right_t) /
-                                 pow(areal_distance_right, 3);
-  for (size_t i = 0; i < 3; ++i) {
-    shift_background->get(i) +=
-        shift_r_left * normal_left.get(i) + shift_r_right * normal_right.get(i);
-  }
-  */
-  // Co-rotaing shift
-  /*
-  const double total_mass = mass_left + mass_right;
-  const double reduced_mass = mass_left * mass_right / total_mass;
-  const auto separation = get_t_separation(present_time);
-  const auto angular_velocity = sqrt(total_mass / cube(get(separation))) *
-                                (1. + .5 * (reduced_mass / total_mass - 3.) *
-                                          total_mass / get(separation));
-  get<0>(*shift_background) += -angular_velocity * get<1>(x);
-  get<1>(*shift_background) += angular_velocity * get<0>(x);
-  */
-  // Boosted Horizon Penetrating superposed shift
-  /*
-  DataType present_time(get_size(get<0>(x)), max_time_interpolator);
-  const auto superposed_spacetime_metric =
-      get_t_superposed_spacetime_metric(present_time);
-  const auto& inv_conformal_metric = cache->get_var(
-      *this,
-      ::Xcts::Tags::InverseConformalMetric<DataType, Dim, Frame::Inertial>{});
-  gr::shift(shift_background, superposed_spacetime_metric,
-  inv_conformal_metric);
-  */
-  /*
-  DataType present_time(get_size(get<0>(x)), max_time_interpolator);
-  const auto& shift_background_aux = get_t_shift(present_time);
-  for (size_t i = 0; i < 3; ++i) {
-    shift_background->get(i) = shift_background_aux.get(i);
-  }
-  */
 }
 
 template <typename DataType>
@@ -529,13 +442,6 @@ void BinaryWithGravitationalWavesVariables<DataType>::operator()(
   tnsr::ii<DataType, 3> dt_conformal_metric{get_size(x.get(0))};
   for (size_t i = 0; i < 3; ++i) {
     for (size_t j = 0; j <= i; ++j) {
-      // Second order
-      /*
-      dt_conformal_metric.get(i, j) = (3. * conformal_metric.get(i, j) -
-                                       4. * conformal_metric_back.get(i, j) +
-                                       conformal_metric_back_two.get(i, j)) /
-                                      (2. * time_displacement);
-      */
       // Third order
       dt_conformal_metric.get(i, j) =
           (11. * conformal_metric.get(i, j) -
@@ -568,22 +474,6 @@ void BinaryWithGravitationalWavesVariables<DataType>::operator()(
     gsl::not_null<Cache*> /*cache*/,
     ::Tags::deriv<Xcts::Tags::ShiftBackground<DataType, Dim, Frame::Inertial>,
                   tmpl::size_t<Dim>, Frame::Inertial> /*meta*/) const {
-  /*
-  ASSERT(mesh.has_value() and inv_jacobian.has_value(),
-         "Need a mesh and a Jacobian for numeric differentiation.");
-  if constexpr (std::is_same_v<DataType, DataVector>) {
-    const auto& shift_background = cache->get_var(
-        *this, Xcts::Tags::ShiftBackground<DataType, Dim, Frame::Inertial>{});
-    partial_derivative(deriv_shift_background, shift_background, mesh->get(),
-                       inv_jacobian->get());
-  } else {
-    (void)deriv_shift_background;
-    (void)cache;
-    ERROR(
-        "Numeric differentiation only works with DataVectors because it needs "
-        "a grid.");
-  }
-  */
   std::fill(deriv_shift_background->begin(), deriv_shift_background->end(), 0.);
 }
 
@@ -621,7 +511,6 @@ void BinaryWithGravitationalWavesVariables<DataType>::operator()(
   DataType present_time(get_size(get<0>(x)), max_time_interpolator);
   const auto conformal_factor_t = get_t_conformal_factor(present_time);
   get(*conformal_factor_minus_one) = get(conformal_factor_t) - 1.0;
-  // get(*conformal_factor_minus_one) = 0.;
 }
 
 template <typename DataType>
@@ -635,7 +524,6 @@ void BinaryWithGravitationalWavesVariables<DataType>::operator()(
   const auto conformal_factor = get_t_conformal_factor(present_time);
   get(*lapse_times_conformal_factor_minus_one) =
       get(lapse) * get(conformal_factor) - 1.;
-  // get(lapse) - 1.;
 }
 
 template <typename DataType>
@@ -1138,7 +1026,7 @@ DataType BinaryWithGravitationalWavesVariables<DataType>::integrate_term(
                (-5. * dot(u2, u2) * dot(u2, u2) +
                 35. * dot(u2, this_normal_at_t) * dot(u2, this_normal_at_t)) *
                    this_normal_at_t.at(i) * this_normal_at_t.at(j));
-          return term1 + term2 + term3 + term4;
+          return term1 + term2 - term3 - term4;
         };
     // result[k] = integration(integrand, time[k], t0, 1e-3, 0, 0.);
     // double error;
@@ -1318,14 +1206,6 @@ Scalar<DataType> BinaryWithGravitationalWavesVariables<
 
   for (size_t i = 0; i < 3; ++i) {
     for (size_t j = 0; j <= i; ++j) {
-      // Second order
-      /*
-      extrinsic_curvature.get(i, j) +=
-          (3. * conformal_metric.get(i, j) -
-           4. * conformal_metric_back.get(i, j) +
-           conformal_metric_back_two.get(i, j)) /
-          (2. * time_displacement * (-2.) * get(lapse));
-      */
       // Third order
       extrinsic_curvature.get(i, j) +=
           (11. * conformal_metric.get(i, j) -
@@ -1550,12 +1430,12 @@ BinaryWithGravitationalWavesVariables<DataType>::get_t_present_term(
                    normal_left_t.get(i) * normal_left_t.get(j) +
                6. * get(dot_product(u1_1, normal_left_t)) *
                    (normal_left_t.get(i) * u1_1.get(j) +
-                    normal_left_t.get(j) * u1_1.get(i)) +
-               2. * u2.get(i) * u2.get(j) +
+                    normal_left_t.get(j) * u1_1.get(i)) -
+               2. * u2.get(i) * u2.get(j) -
                (3. * get(dot_product(u2, normal_left_t)) *
                     get(dot_product(u2, normal_left_t)) -
                 5. * get(dot_product(u2, u2))) *
-                   normal_left_t.get(i) * normal_left_t.get(j) +
+                   normal_left_t.get(i) * normal_left_t.get(j) -
                6. * get(dot_product(u2, normal_left_t)) *
                    (normal_left_t.get(i) * u2.get(j) +
                     normal_left_t.get(j) * u2.get(i))) -
@@ -1567,12 +1447,12 @@ BinaryWithGravitationalWavesVariables<DataType>::get_t_present_term(
                    normal_right_t.get(i) * normal_right_t.get(j) +
                6. * get(dot_product(u1_2, normal_right_t)) *
                    (normal_right_t.get(i) * u1_2.get(j) +
-                    normal_right_t.get(j) * u1_2.get(i)) +
-               2. * u2.get(i) * u2.get(j) +
+                    normal_right_t.get(j) * u1_2.get(i)) -
+               2. * u2.get(i) * u2.get(j) -
                (3. * get(dot_product(u2, normal_right_t)) *
                     get(dot_product(u2, normal_right_t)) -
                 5. * get(dot_product(u2, u2))) *
-                   normal_right_t.get(i) * normal_right_t.get(j) +
+                   normal_right_t.get(i) * normal_right_t.get(j) -
                6. * get(dot_product(u2, normal_right_t)) *
                    (normal_right_t.get(i) * u2.get(j) +
                     normal_right_t.get(j) * u2.get(i)));
@@ -1581,15 +1461,15 @@ BinaryWithGravitationalWavesVariables<DataType>::get_t_present_term(
         -0.25 / get(distance_left_t) *
             (get(dot_product(u1_1, u1_1)) -
              5. * get(dot_product(u1_1, normal_left_t)) *
-                 get(dot_product(u1_1, normal_left_t)) +
-             get(dot_product(u2, u2)) -
+                 get(dot_product(u1_1, normal_left_t)) -
+             get(dot_product(u2, u2)) +
              5. * get(dot_product(u2, normal_left_t)) *
                  get(dot_product(u2, normal_left_t))) -
         0.25 / get(distance_right_t) *
             (get(dot_product(u1_2, u1_2)) -
              5. * get(dot_product(u1_2, normal_right_t)) *
-                 get(dot_product(u1_2, normal_right_t)) +
-             get(dot_product(u2, u2)) -
+                 get(dot_product(u1_2, normal_right_t)) -
+             get(dot_product(u2, u2)) +
              5. * get(dot_product(u2, normal_right_t)) *
                  get(dot_product(u2, normal_right_t)));
   }
@@ -1643,7 +1523,7 @@ BinaryWithGravitationalWavesVariables<DataType>::get_t_past_term(
   for (size_t i = 0; i < 3; ++i) {
     for (size_t j = 0; j <= i; ++j) {
       past_term_t.get(i, j) =
-          -1. / (distance_left_at_retarded_time_left) *
+          1. / (distance_left_at_retarded_time_left) *
               (4. * u1_1.get(i) * u1_1.get(j) +
                (2. * get(dot_product(u1_1, u1_1)) +
                 2. * get(dot_product(u1_1, normal_left_at_retarded_time_left)) *
@@ -1652,7 +1532,7 @@ BinaryWithGravitationalWavesVariables<DataType>::get_t_past_term(
                    normal_left_at_retarded_time_left.get(j) -
                4. * get(dot_product(u1_1, normal_left_at_retarded_time_left)) *
                    (normal_left_at_retarded_time_left.get(i) * u1_1.get(j) +
-                    normal_left_at_retarded_time_left.get(j) * u1_1.get(i))) -
+                    normal_left_at_retarded_time_left.get(j) * u1_1.get(i))) +
           1. / (distance_right_at_retarded_time_right) *
               (4. * u1_2.get(i) * u1_2.get(j) +
                (2. * get(dot_product(u1_2, u1_2)) +
@@ -1693,10 +1573,10 @@ BinaryWithGravitationalWavesVariables<DataType>::get_t_past_term(
                     normal_right_at_retarded_time_right.get(j) * u2_2.get(i)));
     }
     past_term_t.get(i, i) +=
-        -1. / (distance_left_at_retarded_time_left) *
+        1. / (distance_left_at_retarded_time_left) *
             (-2. * get(dot_product(u1_1, u1_1)) +
              2. * get(dot_product(u1_1, normal_left_at_retarded_time_left)) *
-                 get(dot_product(u1_1, normal_left_at_retarded_time_left))) -
+                 get(dot_product(u1_1, normal_left_at_retarded_time_left))) +
         1. / (distance_right_at_retarded_time_right) *
             (-2. * get(dot_product(u1_2, u1_2)) +
              2. * get(dot_product(u1_2, normal_right_at_retarded_time_right)) *
@@ -3106,8 +2986,8 @@ void BinaryWithGravitationalWaves::observer_vector(
   hamiltonian_system(x, dxdt);
 
   for (size_t i = 0; i < 3; ++i) {
-    past_dt_position_left_.at(i).push_back(-dxdt.at(i) * reduced_mass);
-    past_dt_position_right_.at(i).push_back(dxdt.at(i) * reduced_mass);
+    past_dt_position_left_.at(i).push_back(-dxdt.at(i) * mass_right());
+    past_dt_position_right_.at(i).push_back(dxdt.at(i) * mass_left());
   }
   for (size_t i = 3; i < 6; ++i) {
     past_dt_momentum_left_.at(i - 3).push_back(-dxdt.at(i) * reduced_mass);

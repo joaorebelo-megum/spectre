@@ -576,8 +576,6 @@ struct BinaryWithGravitationalWavesVariables
  * j}(\frac{1}{r_a})_{, k}+2[\delta_{i k}(\frac{1}{r_a})_{, j}+\delta_{j
  * k}(\frac{1}{r_a})_{, i}]-\frac{1}{2} r_{a, i j k}\}. \f}
  *
- * \warning The class is still being worked on. The Solver was not tested yet,
- * for now we still see a very slow convergence.
  *
  * To be able to calculate equations \f$\eqref{eq:retarded_term}\f$ and
  * \f$\eqref{eq:integral_term}\f$ we need to look into the past history
