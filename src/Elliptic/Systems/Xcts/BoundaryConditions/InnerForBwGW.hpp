@@ -163,7 +163,9 @@ class InnerForBwGW : public elliptic::BoundaryConditions::BoundaryCondition<3> {
       const tnsr::i<DataVector, 3>& deriv_conformal_factor_correction,
       const tnsr::i<DataVector, 3>&
           deriv_lapse_times_conformal_factor_correction,
-      const tnsr::iJ<DataVector, 3>& deriv_shift_excess_correction) const;
+      const tnsr::iJ<DataVector, 3>& deriv_shift_excess_correction,
+      const tnsr::I<DataVector, 3>& x,
+      const tnsr::i<DataVector, 3>& face_normal) const;
 
   // NOLINTNEXTLINE(google-runtime-references)
   void pup(PUP::er& p) override;

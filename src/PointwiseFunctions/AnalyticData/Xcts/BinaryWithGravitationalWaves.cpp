@@ -1690,40 +1690,38 @@ Scalar<DataType> BinaryWithGravitationalWavesVariables<DataType>::get_t_lapse(
   std::fill(lapse_t.begin(), lapse_t.end(), 0.);
 
   // PN Lapse
-  /*
+  /**/
   const auto conformal_factor_t = get_t_conformal_factor(t);
   get(lapse_t) = (2. - get(conformal_factor_t)) /
   get(conformal_factor_t);
-  */
-  /*
-   const auto distance_left_t = get_t_distance_left(t);
-   const auto distance_right_t = get_t_distance_right(t);
-   const auto separation_t = get_t_separation(t);
-   const auto momentum_left_t = get_t_momentum_left(t);
-   const auto momentum_right_t = get_t_momentum_right(t);
-   get(lapse_t) =
-       1 - mass_left / get(distance_left_t) -
-       mass_right / get(distance_right_t) +
-       (mass_left * mass_right) /
-           (get(distance_left_t) * get(distance_right_t)) +
-       (mass_left * mass_right) / (get(distance_left_t) * get(separation_t)) +
-       (mass_left * mass_right) / (get(distance_right_t) * get(separation_t)) +
-       0.5 * (square(mass_left / get(distance_left_t)) +
-              square(mass_right / get(distance_right_t)) -
-              3. * (get(dot_product(momentum_left_t, momentum_left_t)) /
-                        (get(distance_left_t) * mass_left) +
-                    get(dot_product(momentum_right_t, momentum_right_t)) /
-                        (get(distance_right_t) * mass_right)));
-   double turn_off = .5;
-   if (attenuation_parameter == 0) {
-     turn_off = 1.;
+  * / const auto distance_left_t = get_t_distance_left(t);
+  const auto distance_right_t = get_t_distance_right(t);
+  const auto separation_t = get_t_separation(t);
+  const auto momentum_left_t = get_t_momentum_left(t);
+  const auto momentum_right_t = get_t_momentum_right(t);
+  get(lapse_t) =
+      1 - mass_left / get(distance_left_t) -
+      mass_right / get(distance_right_t) +
+      (mass_left * mass_right) /
+          (get(distance_left_t) * get(distance_right_t)) +
+      (mass_left * mass_right) / (get(distance_left_t) * get(separation_t)) +
+      (mass_left * mass_right) / (get(distance_right_t) * get(separation_t)) +
+      0.5 * (square(mass_left / get(distance_left_t)) +
+             square(mass_right / get(distance_right_t)) -
+             3. * (get(dot_product(momentum_left_t, momentum_left_t)) /
+                       (get(distance_left_t) * mass_left) +
+                   get(dot_product(momentum_right_t, momentum_right_t)) /
+                       (get(distance_right_t) * mass_right)));
+  double turn_off = .5;
+  if (attenuation_parameter == 0) {
+    turn_off = 1.;
    }
    get(lapse_t) *=
        (turn_off + .5 * tanh(attenuation_parameter *
                              (get(distance_left_t) - attenuation_radius))) *
        (turn_off + .5 * tanh(attenuation_parameter *
                              (get(distance_right_t) - attenuation_radius)));
-   */
+
   // Horizon Penetrating Lapse
   /*
   const auto distance_left_t = get_t_distance_left(t);
@@ -1768,14 +1766,12 @@ Scalar<DataType> BinaryWithGravitationalWavesVariables<DataType>::get_t_lapse(
   const auto lapse_right = gr::lapse(shift_right, spacetime_metric_right);
   // get(lapse_t) = get(lapse_left) + get(lapse_right) - 1.;
   get(lapse_t) +=
-      /*
       (1. -
        (turn_off + .5 * tanh(attenuation_parameter *
                              (get(distance_left_t) - attenuation_radius))) *
            (turn_off +
             .5 * tanh(attenuation_parameter *
                       (get(distance_right_t) - attenuation_radius)))) *
-      */
       get(lapse_left) * get(lapse_right);
   return lapse_t;
 }
@@ -1787,7 +1783,7 @@ BinaryWithGravitationalWavesVariables<DataType>::get_t_shift(DataType t) const {
   std::fill(shift_t.begin(), shift_t.end(), 0.);
 
   // PN shift (in wave zone)
-  /*
+
   DataType present_time(get_size(get<0>(x)), max_time_interpolator);
   const auto distance_left_t = get_t_distance_left(present_time);
   const auto distance_right_t = get_t_distance_right(present_time);
@@ -1825,7 +1821,7 @@ BinaryWithGravitationalWavesVariables<DataType>::get_t_shift(DataType t) const {
         (turn_off + .5 * tanh(attenuation_parameter *
                               (get(distance_right_t) - attenuation_radius)));
   }
-  */
+
   // Horizon Penetrating shift
   /*
   DataType present_time(get_size(get<0>(x)), max_time_interpolator);
@@ -1874,16 +1870,13 @@ BinaryWithGravitationalWavesVariables<DataType>::get_t_shift(DataType t) const {
   const auto lapse_right = gr::lapse(shift_right, spacetime_metric_right);
   for (size_t i = 0; i < 3; ++i) {
     shift_t.get(i) +=
-        /*
         (1. -
          (turn_off + .5 * tanh(attenuation_parameter *
                                (get(distance_left_t) - attenuation_radius))) *
              (turn_off +
               .5 * tanh(attenuation_parameter *
                         (get(distance_right_t) - attenuation_radius)))) *
-        */
-        (shift_left.get(i) +   // * get(lapse_right) +
-         shift_right.get(i));  // * get(lapse_left);
+        (shift_left.get(i) + shift_right.get(i));
   }
   return shift_t;
 }
@@ -2094,6 +2087,7 @@ tnsr::aa<DataType, 3> BinaryWithGravitationalWavesVariables<
   const auto normal_left_t = get_t_boosted_normal_left(t);
 
   // Schwarzschild Horizon Penetrating lapse
+  /*
   Scalar<DataType> lapse{t.size()};
   get(lapse) = sqrt(1. - 2. * mass_left / areal_distance_left +
                     27. * square(square(mass_left)) /
@@ -2126,7 +2120,7 @@ tnsr::aa<DataType, 3> BinaryWithGravitationalWavesVariables<
               4);
     }
   }
-  /*
+  */
   // Schwarzschild Harmonic Coordinates lapse
   Scalar<DataType> lapse{t.size()};
   Scalar<DataType> gamma_rr{t.size()};
@@ -2152,7 +2146,7 @@ tnsr::aa<DataType, 3> BinaryWithGravitationalWavesVariables<
     }
     spatial_metric.get(i, i) += square(1. + mass_left / get(distance_left_t));
   }
-  */
+
   tnsr::aa<DataType, 3> spacetime_metric{t.size()};
   gr::spacetime_metric(make_not_null(&spacetime_metric), lapse, shift,
                        spatial_metric);
@@ -2206,6 +2200,7 @@ tnsr::aa<DataType, 3> BinaryWithGravitationalWavesVariables<
   const auto normal_right_t = get_t_boosted_normal_right(t);
 
   // Schwarzschild Horizon Penetrating lapse
+  /*
   Scalar<DataType> lapse{t.size()};
   get(lapse) = sqrt(1. - 2. * mass_right / areal_distance_right +
                     27. * square(square(mass_right)) /
@@ -2238,7 +2233,7 @@ tnsr::aa<DataType, 3> BinaryWithGravitationalWavesVariables<
           4);
     }
   }
-  /*
+  */
   // Schwarzschild Harmonic Coordinates lapse
   Scalar<DataType> lapse{t.size()};
   Scalar<DataType> gamma_rr{t.size()};
@@ -2266,7 +2261,7 @@ tnsr::aa<DataType, 3> BinaryWithGravitationalWavesVariables<
     }
     spatial_metric.get(i, i) += square(1. + mass_right / get(distance_right_t));
   }
-  */
+
   tnsr::aa<DataType, 3> spacetime_metric{t.size()};
   gr::spacetime_metric(make_not_null(&spacetime_metric), lapse, shift,
                        spatial_metric);
