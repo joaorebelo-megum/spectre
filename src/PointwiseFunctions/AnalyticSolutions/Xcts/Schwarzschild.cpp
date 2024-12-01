@@ -157,10 +157,10 @@ double kerr_schild_areal_radius_from_maximal_isotropic(
 
 DataVector kerr_schild_areal_radius_from_maximal_isotropic(
     const DataVector& isotropic_radius, const double mass) {
-  DataVector lower(isotropic_radius.size(), 1.5 * mass);
-  DataVector upper(isotropic_radius.size(), 1e9);
-  return RootFinder::toms748<true>(
-      [&isotropic_radius, &mass](const auto areal_radius, const size_t i) {
+  const DataVector lower(isotropic_radius.size(), 1.5 * mass);
+  const DataVector upper(isotropic_radius.size(), 1e9);
+  return RootFinder::toms748<false>(
+      [&isotropic_radius, &mass](const double areal_radius, const size_t i) {
         return .25 *
                    (2. * areal_radius + mass +
                     sqrt(4. * square(areal_radius) + 4. * areal_radius * mass +

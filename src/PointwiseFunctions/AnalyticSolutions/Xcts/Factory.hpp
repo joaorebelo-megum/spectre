@@ -31,5 +31,6 @@ using all_analytic_solutions =
                // (analytic) solution and the numerical solution.
                WrappedGrMhd<grmhd::AnalyticData::CcsnCollapse>,
                WrappedGrMhd<grmhd::AnalyticData::MagnetizedTovStar>>;
+
 }  // namespace Solutions
 }  // namespace Xcts
