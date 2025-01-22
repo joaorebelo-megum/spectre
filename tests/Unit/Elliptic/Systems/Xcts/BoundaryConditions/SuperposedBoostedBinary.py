@@ -166,8 +166,65 @@ def n_dot_conformal_factor_gradient(x, face_normal):
 
 
 def n_dot_lapse_times_conformal_factor_gradient(x, face_normal):
-    return 0.0
+    h = 4e-4
+    derivatives = np.zeros(3)
+    coeffs = np.array(
+        [1 / 280, -4 / 105, 1 / 5, -4 / 5, 0, 4 / 5, -1 / 5, 4 / 105, -1 / 280]
+    )
+
+    f_values_x0 = np.array(
+        [
+            lapse_times_conformal_factor_minus_one([x[0] + i * h, x[1], x[2]])
+            for i in range(-4, 5)
+        ]
+    )
+    derivatives[0] = np.dot(coeffs, f_values_x0) / h
+
+    f_values_x1 = np.array(
+        [
+            lapse_times_conformal_factor_minus_one([x[0], x[1] + i * h, x[2]])
+            for i in range(-4, 5)
+        ]
+    )
+    derivatives[1] = np.dot(coeffs, f_values_x1) / h
+
+    f_values_x2 = np.array(
+        [
+            lapse_times_conformal_factor_minus_one([x[0], x[1], x[2] + i * h])
+            for i in range(-4, 5)
+        ]
+    )
+    derivatives[2] = np.dot(coeffs, f_values_x2) / h
+
+    return np.dot(derivatives, face_normal)
 
 
 def n_dot_longitudinal_shift_excess(x, face_normal):
-    return np.zeros(3)
+    h = 4e-4
+    derivatives = np.zeros((3, 3))
+    result = np.zeros(3)
+    coeffs = np.array(
+        [1 / 280, -4 / 105, 1 / 5, -4 / 5, 0, 4 / 5, -1 / 5, 4 / 105, -1 / 280]
+    )
+
+    for i in range(3):
+        f_values_x0 = np.array(
+            [shift_excess([x[0] + j * h, x[1], x[2]])[i] for j in range(-4, 5)]
+        )
+        derivatives[i, 0] = np.dot(coeffs, f_values_x0) / h
+
+        f_values_x1 = np.array(
+            [shift_excess([x[0], x[1] + j * h, x[2]])[i] for j in range(-4, 5)]
+        )
+        derivatives[i, 1] = np.dot(coeffs, f_values_x1) / h
+
+        f_values_x2 = np.array(
+            [shift_excess([x[0], x[1], x[2] + j * h])[i] for j in range(-4, 5)]
+        )
+        derivatives[i, 2] = np.dot(coeffs, f_values_x2) / h
+
+    for i in range(3):
+        for j in range(3):
+            result[i] += derivatives[i, j] * face_normal[j]
+
+    return result

@@ -12,12 +12,23 @@
 #include <optional>
 
 #include "DataStructures/DataVector.hpp"
+#include "DataStructures/Tags/TempTensor.hpp"
+#include "DataStructures/TempBuffer.hpp"
 #include "DataStructures/Tensor/EagerMath/DeterminantAndInverse.hpp"
 #include "DataStructures/Tensor/IndexType.hpp"
 #include "DataStructures/Tensor/Tensor.hpp"
 #include "DataStructures/Tensor/TypeAliases.hpp"
+#include "Domain/CoordinateMaps/Affine.hpp"
+#include "Domain/CoordinateMaps/CoordinateMap.hpp"
+#include "Domain/CoordinateMaps/CoordinateMap.tpp"
+#include "Domain/CoordinateMaps/ProductMaps.hpp"
 #include "Elliptic/BoundaryConditions/BoundaryConditionType.hpp"
 #include "Elliptic/Systems/Xcts/Tags.hpp"
+#include "NumericalAlgorithms/LinearOperators/PartialDerivatives.hpp"
+#include "NumericalAlgorithms/Spectral/Basis.hpp"
+#include "NumericalAlgorithms/Spectral/LogicalCoordinates.hpp"
+#include "NumericalAlgorithms/Spectral/Mesh.hpp"
+#include "NumericalAlgorithms/Spectral/Quadrature.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Xcts/Factory.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Xcts/Schwarzschild.hpp"
 #include "PointwiseFunctions/GeneralRelativity/Lapse.hpp"
@@ -232,47 +243,90 @@ void implement_apply_neumann(
     const gsl::not_null<tnsr::I<DataVector, 3>*>
         n_dot_longitudinal_shift_excess,
     const std::array<std::optional<std::unique_ptr<IsolatedObjectBase>>, 2>&
-    /*superposed_objects*/,
-    const tnsr::I<DataVector, 3>& /*x*/,
-    const tnsr::i<DataVector, 3>& /*face_normal*/) {
-  /*
-  using analytic_tags = tmpl::list<
-      ::Tags::deriv<Xcts::Tags::ConformalFactorMinusOne<DataVector>,
-                    tmpl::size_t<3>, Frame::Inertial>,
-      ::Tags::deriv<Xcts::Tags::LapseTimesConformalFactorMinusOne<DataVector>,
-                    tmpl::size_t<3>, Frame::Inertial>,
-      ::Tags::deriv<Xcts::Tags::ShiftExcess<DataVector, 3, Frame::Inertial>,
-                    tmpl::size_t<3>, Frame::Inertial>>;
+        superposed_objects,
+    const std::array<double, 2>& xcoords, const std::array<double, 2>& masses,
+    const std::array<double, 3>& momentum_left,
+    const std::array<double, 3>& momentum_right, const double y_offset,
+    const double z_offset, const tnsr::I<DataVector, 3>& x,
+    const tnsr::i<DataVector, 3>& face_normal) {
+  using Affine = domain::CoordinateMaps::Affine;
+  using Affine3D =
+      domain::CoordinateMaps::ProductOf3Maps<Affine, Affine, Affine>;
+  const size_t num_points_1d = 5;
+  const Mesh<3> mesh{num_points_1d, Spectral::Basis::Legendre,
+                     Spectral::Quadrature::GaussLobatto};
+  const auto x_logical = logical_coordinates(mesh);
 
-  const auto solution_vars =
-      variables_from_tagged_tuple((*solution)->variables(x, analytic_tags{}));
-  const auto& deriv_conformal_factor_minus_one =
-      get<::Tags::deriv<Xcts::Tags::ConformalFactorMinusOne<DataVector>,
-                        tmpl::size_t<3>, Frame::Inertial>>(solution_vars);
-  const auto& deriv_lapse_times_conformal_factor_minus_one = get<
-      ::Tags::deriv<Xcts::Tags::LapseTimesConformalFactorMinusOne<DataVector>,
-                    tmpl::size_t<3>, Frame::Inertial>>(solution_vars);
-  const auto& deriv_shift_excess =
-      get<::Tags::deriv<Xcts::Tags::ShiftExcess<DataVector, 3, Frame::Inertial>,
-                        tmpl::size_t<3>, Frame::Inertial>>(solution_vars);
-  */
+  TempBuffer<tmpl::list<::Tags::TempScalar<0>, ::Tags::TempScalar<1>,
+                        ::Tags::TempI<2, 3>>>
+      buffer1{num_points_1d * num_points_1d * num_points_1d};
+
+  auto& conformal_factor_minus_one = get<::Tags::TempScalar<0>>(buffer1);
+  auto& lapse_times_conformal_factor_minus_one =
+      get<::Tags::TempScalar<1>>(buffer1);
+  auto& shift_excess = get<::Tags::TempI<2, 3>>(buffer1);
+
+  TempBuffer<tmpl::list<::Tags::Tempi<0, 3>, ::Tags::TempiJ<1, 3>>> buffer2{
+      x.begin()->size()};
+
+  auto& deriv_lapse_times_conformal_factor_minus_one =
+      get<::Tags::Tempi<0, 3>>(buffer2);
+  auto& deriv_shift_excess = get<::Tags::TempiJ<1, 3>>(buffer2);
+
+  // k is running through each point
+  for (size_t k = 0; k < x.begin()->size(); ++k) {
+    const std::array<double, 3> lower_bound{
+        {x.get(0)[k] - 0.001, x.get(1)[k] - 0.001, x.get(2)[k] - 0.001}};
+    const std::array<double, 3> upper_bound{
+        {x.get(0)[k] + 0.001, x.get(1)[k] + 0.001, x.get(2)[k] + 0.001}};
+    const auto coord_map =
+        domain::make_coordinate_map<Frame::ElementLogical, Frame::Inertial>(
+            Affine3D{Affine{-1., 1., lower_bound[0], upper_bound[0]},
+                     Affine{-1., 1., lower_bound[1], upper_bound[1]},
+                     Affine{-1., 1., lower_bound[2], upper_bound[2]}});
+    const auto x_in = coord_map(x_logical);
+    const auto inv_jacobian = coord_map.inv_jacobian(x_logical);
+
+    implement_apply_dirichlet<IsolatedObjectBase, IsolatedObjectClasses>(
+        make_not_null(&conformal_factor_minus_one),
+        make_not_null(&lapse_times_conformal_factor_minus_one),
+        make_not_null(&shift_excess), superposed_objects, xcoords, masses,
+        momentum_left, momentum_right, y_offset, z_offset, x_in);
+
+    auto deriv_lapse_times_conformal_factor_minus_one_in = partial_derivative(
+        lapse_times_conformal_factor_minus_one, mesh, inv_jacobian);
+    auto deriv_shift_excess_in =
+        partial_derivative(shift_excess, mesh, inv_jacobian);
+
+    for (size_t l = 0; l < num_points_1d * num_points_1d * num_points_1d; ++l) {
+      if (x_in.get(0)[l] == x.get(0)[k] && x_in.get(1)[l] == x.get(1)[k] &&
+          x_in.get(2)[l] == x.get(2)[k]) {
+        for (size_t i = 0; i < 3; ++i) {
+          deriv_lapse_times_conformal_factor_minus_one.get(i)[k] =
+              deriv_lapse_times_conformal_factor_minus_one_in.get(i)[l];
+          for (size_t j = 0; j < 3; ++j) {
+            deriv_shift_excess.get(i, j)[k] =
+                deriv_shift_excess_in.get(i, j)[l];
+          }
+        }
+      }
+    }
+  }
+
   get(*n_dot_conformal_factor_gradient) = 0.;
   get(*n_dot_lapse_times_conformal_factor_gradient) = 0.;
   std::fill(n_dot_longitudinal_shift_excess->begin(),
             n_dot_longitudinal_shift_excess->end(), 0.);
-  /*
+
   for (size_t i = 0; i < 3; ++i) {
-    get(*n_dot_conformal_factor_gradient) +=
-        face_normal.get(i) * deriv_conformal_factor_minus_one.get(i);
     get(*n_dot_lapse_times_conformal_factor_gradient) +=
         face_normal.get(i) *
         deriv_lapse_times_conformal_factor_minus_one.get(i);
     for (size_t j = 0; j < 3; ++j) {
       n_dot_longitudinal_shift_excess->get(i) +=
-          face_normal.get(j) * deriv_shift_excess.get(i, j);
+          face_normal.get(j) * deriv_shift_excess.get(j, i);
     }
   }
-  */
 }
 
 }  // namespace
@@ -303,7 +357,8 @@ void SuperposedBoostedBinary<IsolatedObjectBase, IsolatedObjectClasses>::apply(
     implement_apply_neumann<IsolatedObjectBase, IsolatedObjectClasses>(
         n_dot_conformal_factor_gradient,
         n_dot_lapse_times_conformal_factor_gradient,
-        n_dot_longitudinal_shift_excess, superposed_objects_, x, face_normal);
+        n_dot_longitudinal_shift_excess, superposed_objects_, xcoords_, masses_,
+        momentum_left_, momentum_right_, y_offset_, z_offset_, x, face_normal);
   }
 }
 

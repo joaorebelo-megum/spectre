@@ -95,7 +95,7 @@ void test_suite(const elliptic::BoundaryConditionType& boundary,
   }
   {
     MAKE_GENERATOR(gen);
-    std::uniform_real_distribution<> dist(-1., 1.);
+    std::uniform_real_distribution<> dist(-10., -8.);
     const size_t num_points = 3;
     const auto direction = Direction<3>::upper_zeta();
     const std::array<double, 3> center{{0., 0., 0.}};
@@ -131,29 +131,6 @@ void test_suite(const elliptic::BoundaryConditionType& boundary,
         num_points, std::numeric_limits<double>::signaling_NaN()};
     const tnsr::iJ<DataVector, 3> deriv_shift_excess{
         num_points, std::numeric_limits<double>::signaling_NaN()};
-    /*
-    if constexpr (Linearized == false) {
-      boundary_condition.apply(
-          make_not_null(&conformal_factor_minus_one),
-          make_not_null(&lapse_times_conformal_factor_minus_one),
-          make_not_null(&shift_excess),
-          make_not_null(&n_dot_conformal_factor_gradient),
-          make_not_null(&n_dot_lapse_times_conformal_factor_gradient),
-          make_not_null(&n_dot_longitudinal_shift_excess),
-          deriv_conformal_factor, deriv_lapse_times_conformal_factor,
-          deriv_shift_excess, x, face_normal);
-    } else if constexpr (Linearized == true) {
-      boundary_condition.apply_linearized(
-          make_not_null(&conformal_factor_minus_one),
-          make_not_null(&lapse_times_conformal_factor_minus_one),
-          make_not_null(&shift_excess),
-          make_not_null(&n_dot_conformal_factor_gradient),
-          make_not_null(&n_dot_lapse_times_conformal_factor_gradient),
-          make_not_null(&n_dot_longitudinal_shift_excess),
-          deriv_conformal_factor, deriv_lapse_times_conformal_factor,
-          deriv_shift_excess, x, face_normal);
-    }
-    */
 
     elliptic::apply_boundary_condition<
         Linearized, void,
@@ -200,18 +177,26 @@ void test_suite(const elliptic::BoundaryConditionType& boundary,
       const auto expected_n_dot_longitudinal_shift_excess =
           pypp::call<tnsr::I<DataVector, 3>>(
               py_module, "n_dot_longitudinal_shift_excess", x, face_normal);
-
+      // clang-tidy: static object creation may throw exception
+      static Approx approx =                                     // NOLINT
+          Approx::custom()                                       // NOLINT
+              .epsilon(std::numeric_limits<double>::epsilon() *  // NOLINT
+                       10000)                                    // NOLINT
+              .scale(1.0);                                       // NOLINT
       CHECK_ITERABLE_APPROX(get(n_dot_conformal_factor_gradient),
                             get(expected_n_dot_conformal_factor_gradient));
-      CHECK_ITERABLE_APPROX(
+      CHECK_ITERABLE_CUSTOM_APPROX(
           get(n_dot_lapse_times_conformal_factor_gradient),
-          get(expected_n_dot_lapse_times_conformal_factor_gradient));
-      CHECK_ITERABLE_APPROX(get<0>(n_dot_longitudinal_shift_excess),
-                            get<0>(expected_n_dot_longitudinal_shift_excess));
-      CHECK_ITERABLE_APPROX(get<1>(n_dot_longitudinal_shift_excess),
-                            get<1>(expected_n_dot_longitudinal_shift_excess));
-      CHECK_ITERABLE_APPROX(get<2>(n_dot_longitudinal_shift_excess),
-                            get<2>(expected_n_dot_longitudinal_shift_excess));
+          get(expected_n_dot_lapse_times_conformal_factor_gradient), approx);
+      CHECK_ITERABLE_CUSTOM_APPROX(
+          get<0>(n_dot_longitudinal_shift_excess),
+          get<0>(expected_n_dot_longitudinal_shift_excess), approx);
+      CHECK_ITERABLE_CUSTOM_APPROX(
+          get<1>(n_dot_longitudinal_shift_excess),
+          get<1>(expected_n_dot_longitudinal_shift_excess), approx);
+      CHECK_ITERABLE_CUSTOM_APPROX(
+          get<2>(n_dot_longitudinal_shift_excess),
+          get<2>(expected_n_dot_longitudinal_shift_excess), approx);
     }
   }
 }
