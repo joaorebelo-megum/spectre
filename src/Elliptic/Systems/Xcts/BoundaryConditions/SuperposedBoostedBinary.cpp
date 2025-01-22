@@ -31,12 +31,14 @@
 #include "NumericalAlgorithms/Spectral/Quadrature.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Xcts/Factory.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Xcts/Schwarzschild.hpp"
+#include "PointwiseFunctions/GeneralRelativity/Christoffel.hpp"
 #include "PointwiseFunctions/GeneralRelativity/Lapse.hpp"
 #include "PointwiseFunctions/GeneralRelativity/Shift.hpp"
 #include "PointwiseFunctions/GeneralRelativity/SpacetimeMetric.hpp"
 #include "PointwiseFunctions/GeneralRelativity/SpatialMetric.hpp"
 #include "PointwiseFunctions/InitialDataUtilities/AnalyticSolution.hpp"
 #include "PointwiseFunctions/SpecialRelativity/LorentzBoostMatrix.hpp"
+#include "PointwiseFunctions/Xcts/LongitudinalOperator.hpp"
 #include "Utilities/CallWithDynamicType.hpp"
 #include "Utilities/ConstantExpressions.hpp"
 #include "Utilities/Gsl.hpp"
@@ -52,6 +54,7 @@ void implement_apply_dirichlet(
     const gsl::not_null<Scalar<DataVector>*>
         lapse_times_conformal_factor_minus_one,
     const gsl::not_null<tnsr::I<DataVector, 3>*> shift_excess,
+    const gsl::not_null<tnsr::ii<DataVector, 3>*> conformal_metric,
     const std::array<std::optional<std::unique_ptr<IsolatedObjectBase>>, 2>&
         superposed_objects,
     const std::array<double, 2>& xcoords, const std::array<double, 2>& masses,
@@ -233,6 +236,14 @@ void implement_apply_dirichlet(
     shift_excess->get(i) =
         boosted_shift_left.get(i) + boosted_shift_right.get(i);
   }
+
+  for (size_t i = 0; i < 3; ++i) {
+    for (size_t j = 0; j <= i; ++j) {
+      conformal_metric->get(i, j) =
+          conformal_metric_left.get(i, j) + conformal_metric_right.get(i, j);
+    }
+    conformal_metric->get(i, i) -= 1.;
+  }
 }
 
 template <typename IsolatedObjectBase, typename IsolatedObjectClasses>
@@ -258,20 +269,27 @@ void implement_apply_neumann(
   const auto x_logical = logical_coordinates(mesh);
 
   TempBuffer<tmpl::list<::Tags::TempScalar<0>, ::Tags::TempScalar<1>,
-                        ::Tags::TempI<2, 3>>>
+                        ::Tags::TempI<2, 3>, ::Tags::Tempii<3, 3>>>
       buffer1{num_points_1d * num_points_1d * num_points_1d};
 
   auto& conformal_factor_minus_one = get<::Tags::TempScalar<0>>(buffer1);
   auto& lapse_times_conformal_factor_minus_one =
       get<::Tags::TempScalar<1>>(buffer1);
-  auto& shift_excess = get<::Tags::TempI<2, 3>>(buffer1);
+  auto& shift_excess1 = get<::Tags::TempI<2, 3>>(buffer1);
+  auto& conformal_metric1 = get<::Tags::Tempii<3, 3>>(buffer1);
 
-  TempBuffer<tmpl::list<::Tags::Tempi<0, 3>, ::Tags::TempiJ<1, 3>>> buffer2{
-      x.begin()->size()};
+  TempBuffer<tmpl::list<::Tags::Tempi<0, 3>, ::Tags::TempiJ<1, 3>,
+                        ::Tags::Tempii<2, 3>, ::Tags::Tempijj<3, 3>,
+                        ::Tags::TempI<4, 3>, ::Tags::TempII<5, 3>>>
+      buffer2{x.begin()->size()};
 
   auto& deriv_lapse_times_conformal_factor_minus_one =
       get<::Tags::Tempi<0, 3>>(buffer2);
   auto& deriv_shift_excess = get<::Tags::TempiJ<1, 3>>(buffer2);
+  auto& conformal_metric2 = get<::Tags::Tempii<2, 3>>(buffer2);
+  auto& deriv_conformal_metric = get<::Tags::Tempijj<3, 3>>(buffer2);
+  auto& shift_excess2 = get<::Tags::TempI<4, 3>>(buffer2);
+  auto& longitudinal_shift_excess = get<::Tags::TempII<5, 3>>(buffer2);
 
   // k is running through each point
   for (size_t k = 0; k < x.begin()->size(); ++k) {
@@ -290,13 +308,17 @@ void implement_apply_neumann(
     implement_apply_dirichlet<IsolatedObjectBase, IsolatedObjectClasses>(
         make_not_null(&conformal_factor_minus_one),
         make_not_null(&lapse_times_conformal_factor_minus_one),
-        make_not_null(&shift_excess), superposed_objects, xcoords, masses,
-        momentum_left, momentum_right, y_offset, z_offset, x_in);
+        make_not_null(&shift_excess1), make_not_null(&conformal_metric1),
+        superposed_objects, xcoords, masses, momentum_left, momentum_right,
+        y_offset, z_offset, x_in);
 
-    auto deriv_lapse_times_conformal_factor_minus_one_in = partial_derivative(
-        lapse_times_conformal_factor_minus_one, mesh, inv_jacobian);
-    auto deriv_shift_excess_in =
-        partial_derivative(shift_excess, mesh, inv_jacobian);
+    const auto deriv_lapse_times_conformal_factor_minus_one_in =
+        partial_derivative(lapse_times_conformal_factor_minus_one, mesh,
+                           inv_jacobian);
+    const auto deriv_shift_excess_in =
+        partial_derivative(shift_excess1, mesh, inv_jacobian);
+    const auto deriv_conformal_metric_in =
+        partial_derivative(conformal_metric1, mesh, inv_jacobian);
 
     for (size_t l = 0; l < num_points_1d * num_points_1d * num_points_1d; ++l) {
       if (x_in.get(0)[l] == x.get(0)[k] && x_in.get(1)[l] == x.get(1)[k] &&
@@ -304,14 +326,28 @@ void implement_apply_neumann(
         for (size_t i = 0; i < 3; ++i) {
           deriv_lapse_times_conformal_factor_minus_one.get(i)[k] =
               deriv_lapse_times_conformal_factor_minus_one_in.get(i)[l];
+          shift_excess2.get(i)[k] = shift_excess1.get(i)[l];
           for (size_t j = 0; j < 3; ++j) {
             deriv_shift_excess.get(i, j)[k] =
                 deriv_shift_excess_in.get(i, j)[l];
+            conformal_metric2.get(i, j)[k] = conformal_metric1.get(i, j)[l];
+            for (size_t m = 0; m <= j; ++m) {
+              deriv_conformal_metric.get(i, j, m)[k] =
+                  deriv_conformal_metric_in.get(i, j, m)[l];
+            }
           }
         }
       }
     }
   }
+
+  const auto inv_metric = determinant_and_inverse(conformal_metric2).second;
+  const auto christoffel_second_kind =
+      gr::christoffel_second_kind(deriv_conformal_metric, inv_metric);
+
+  longitudinal_operator(make_not_null(&longitudinal_shift_excess),
+                        shift_excess2, deriv_shift_excess, inv_metric,
+                        christoffel_second_kind);
 
   get(*n_dot_conformal_factor_gradient) = 0.;
   get(*n_dot_lapse_times_conformal_factor_gradient) = 0.;
@@ -324,7 +360,7 @@ void implement_apply_neumann(
         deriv_lapse_times_conformal_factor_minus_one.get(i);
     for (size_t j = 0; j < 3; ++j) {
       n_dot_longitudinal_shift_excess->get(i) +=
-          face_normal.get(j) * deriv_shift_excess.get(j, i);
+          face_normal.get(j) * longitudinal_shift_excess.get(j, i);
     }
   }
 }
@@ -348,11 +384,13 @@ void SuperposedBoostedBinary<IsolatedObjectBase, IsolatedObjectClasses>::apply(
     const tnsr::iJ<DataVector, 3>& /*deriv_shift_excess_correction1*/,
     const tnsr::I<DataVector, 3>& x,
     const tnsr::i<DataVector, 3>& face_normal) const {
+  tnsr::ii<DataVector, 3> conformal_metric{x.begin()->size()};
   if (boundary_ == elliptic::BoundaryConditionType::Dirichlet) {
     implement_apply_dirichlet<IsolatedObjectBase, IsolatedObjectClasses>(
         conformal_factor_minus_one, lapse_times_conformal_factor_minus_one,
-        shift_excess, superposed_objects_, xcoords_, masses_, momentum_left_,
-        momentum_right_, y_offset_, z_offset_, x);
+        shift_excess, make_not_null(&conformal_metric), superposed_objects_,
+        xcoords_, masses_, momentum_left_, momentum_right_, y_offset_,
+        z_offset_, x);
   } else if (boundary_ == elliptic::BoundaryConditionType::Neumann) {
     implement_apply_neumann<IsolatedObjectBase, IsolatedObjectClasses>(
         n_dot_conformal_factor_gradient,

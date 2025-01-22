@@ -131,6 +131,21 @@ def lapse(spacetime_metric):
     return lapse
 
 
+def spatial_metric(x):
+    boosted_spacetime_metric_left = boost_spacetime_metric(
+        spacetime_left(x), np.array(momentum_left) / masses[0]
+    )
+    boosted_spacetime_metric_right = boost_spacetime_metric(
+        spacetime_right(x), np.array(momentum_right) / masses[1]
+    )
+
+    return (
+        boosted_spacetime_metric_left[1:, 1:]
+        + boosted_spacetime_metric_right[1:, 1:]
+        - np.identity(3)
+    )
+
+
 def conformal_factor_minus_one(x):
     return 0.0
 
@@ -201,7 +216,7 @@ def n_dot_lapse_times_conformal_factor_gradient(x, face_normal):
 
 def n_dot_longitudinal_shift_excess(x, face_normal):
     h = 4e-4
-    derivatives = np.zeros((3, 3))
+    deriv_shift = np.zeros((3, 3))
     result = np.zeros(3)
     coeffs = np.array(
         [1 / 280, -4 / 105, 1 / 5, -4 / 5, 0, 4 / 5, -1 / 5, 4 / 105, -1 / 280]
@@ -211,20 +226,87 @@ def n_dot_longitudinal_shift_excess(x, face_normal):
         f_values_x0 = np.array(
             [shift_excess([x[0] + j * h, x[1], x[2]])[i] for j in range(-4, 5)]
         )
-        derivatives[i, 0] = np.dot(coeffs, f_values_x0) / h
+        deriv_shift[0, i] = np.dot(coeffs, f_values_x0) / h
 
         f_values_x1 = np.array(
             [shift_excess([x[0], x[1] + j * h, x[2]])[i] for j in range(-4, 5)]
         )
-        derivatives[i, 1] = np.dot(coeffs, f_values_x1) / h
+        deriv_shift[1, i] = np.dot(coeffs, f_values_x1) / h
 
         f_values_x2 = np.array(
             [shift_excess([x[0], x[1], x[2] + j * h])[i] for j in range(-4, 5)]
         )
-        derivatives[i, 2] = np.dot(coeffs, f_values_x2) / h
+        deriv_shift[2, i] = np.dot(coeffs, f_values_x2) / h
+
+    deriv_metric = np.zeros((3, 3, 3))
 
     for i in range(3):
         for j in range(3):
-            result[i] += derivatives[i, j] * face_normal[j]
+            f_values_x0 = np.array(
+                [
+                    spatial_metric([x[0] + k * h, x[1], x[2]])[i, j]
+                    for k in range(-4, 5)
+                ]
+            )
+            deriv_metric[0, i, j] = np.dot(coeffs, f_values_x0) / h
+
+            f_values_x1 = np.array(
+                [
+                    spatial_metric([x[0], x[1] + k * h, x[2]])[i, j]
+                    for k in range(-4, 5)
+                ]
+            )
+            deriv_metric[1, i, j] = np.dot(coeffs, f_values_x1) / h
+
+            f_values_x2 = np.array(
+                [
+                    spatial_metric([x[0], x[1], x[2] + k * h])[i, j]
+                    for k in range(-4, 5)
+                ]
+            )
+            deriv_metric[2, i, j] = np.dot(coeffs, f_values_x2) / h
+
+    inv_metric = np.linalg.inv(spatial_metric(x))
+
+    christoffel_second_kind = np.zeros((3, 3, 3))
+    for i in range(3):
+        for j in range(3):
+            for k in range(3):
+                christoffel_second_kind[i, j, k] = 0.5 * np.sum(
+                    inv_metric[i, l]
+                    * (
+                        deriv_metric[j, k, l]
+                        + deriv_metric[k, j, l]
+                        - deriv_metric[l, j, k]
+                    )
+                    for l in range(3)
+                )
+
+    longitudinal_shift_excess = np.zeros((3, 3))
+    for i in range(3):
+        for j in range(3):
+            for k in range(3):
+                longitudinal_shift_excess[i, j] += (
+                    inv_metric[i, k] * deriv_shift[k, j]
+                    + inv_metric[j, k] * deriv_shift[k, i]
+                    - (2.0 / 3.0) * inv_metric[i, j] * deriv_shift[k, k]
+                )
+                for l in range(3):
+                    longitudinal_shift_excess[i, j] += (
+                        inv_metric[i, k]
+                        * christoffel_second_kind[j, k, l]
+                        * shift_excess(x)[l]
+                        + inv_metric[j, k]
+                        * christoffel_second_kind[i, k, l]
+                        * shift_excess(x)[l]
+                        - (2.0 / 3.0)
+                        * inv_metric[i, j]
+                        * christoffel_second_kind[k, k, l]
+                        * shift_excess(x)[l]
+                    )
+
+    for i in range(3):
+        for j in range(3):
+            result[i] += face_normal[j] * longitudinal_shift_excess[j, i]
 
     return result
