@@ -30,8 +30,10 @@ target_link_libraries(
   PUBLIC
   DataStructures
   Domain
+  DomainCreators
   Elliptic
   ErrorHandling
+  LinearOperators
   XctsSolutions
   Options
   Serialization
