@@ -38,5 +38,6 @@ target_link_libraries(
   XctsSolutions
   Options
   Serialization
+  Spectral
   Utilities
   )
