@@ -118,8 +118,8 @@ void test_data(const std::array<double, 2>& x_coords,
          "energy_density_" + py_functions_suffix,
          "stress_trace_" + py_functions_suffix,
          "momentum_density_" + py_functions_suffix},
-        {{{x_coords[0] * 0.5, x_coords[1] * 0.5}}}, std::make_tuple(),
-        DataVector(5));
+        {{{x_coords[0] * 0.2, x_coords[0] * 0.1}}}, std::make_tuple(),
+        DataVector(1), 1e-3);
   }
   {
     const auto position_left =
@@ -142,12 +142,13 @@ SPECTRE_TEST_CASE(
     "[PointwiseFunctions][Unit]") {
   const pypp::SetupLocalPythonEnvironment local_python_env{
       "PointwiseFunctions/AnalyticData/Xcts"};
-  test_data({{-4., 2.}}, {{1.1, 0.43}}, {{0.01, 0.01, 0.01}}, {{0.02, 0.01}},
-            1.1, 3.6, 20., false, "bbh_isotropic",
+  test_data({{-4., 2.}}, {{1.1, 0.43}},
+            {{0.00001, 0.24933490938149952, 0.00001}}, {{0.02, 0.01}}, 1.1, 3.6,
+            20., false, "bbh_isotropic",
             "BinaryWithGravitationalWaves:\n"
             "  XCoords: [-4., 2.]\n"
             "  Masses: [1.1, 0.43]\n"
-            "  MomentumRight: [0.01, 0.01, 0.01]\n"
+            "  MomentumRight: [0.00001, 0.24933490938149952, 0.00001]\n"
             "  CenterOfMassOffset: [0.02, 0.01]\n"
             "  ObjectLeft:\n"
             "    Schwarzschild:\n"

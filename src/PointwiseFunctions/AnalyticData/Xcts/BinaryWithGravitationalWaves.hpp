@@ -81,9 +81,8 @@ struct BinaryWithGravitationalWavesVariables
       hydro_tags<DataType>>;
 
   using boost_tags = tmpl::append<
-      tmpl::list<Xcts::Tags::ConformalMetric<DataType, Dim, Frame::Inertial>,
-                 Xcts::Tags::ConformalFactorMinusOne<DataType>,
-                 Xcts::Tags::LapseTimesConformalFactorMinusOne<DataType>,
+      tmpl::list<gr::Tags::SpatialMetric<DataType, Dim, Frame::Inertial>,
+                 gr::Tags::Lapse<DataType>,
                  Xcts::Tags::ShiftExcess<DataType, Dim, Frame::Inertial>>>;
 
   BinaryWithGravitationalWavesVariables(
@@ -292,8 +291,8 @@ struct BinaryWithGravitationalWavesVariables
 
  private:
   void interpolate_past_history();
-  // DataType find_retarded_time_left(DataType t0) const;
-  // DataType find_retarded_time_right(DataType t0) const;
+  DataType find_retarded_time_left(DataType t0) const;
+  DataType find_retarded_time_right(DataType t0) const;
   Scalar<DataType> get_t_distance_left(DataType t) const;
   Scalar<DataType> get_t_distance_right(DataType t) const;
   Scalar<DataType> get_t_separation(DataType t) const;
@@ -302,8 +301,8 @@ struct BinaryWithGravitationalWavesVariables
   tnsr::I<DataType, 3> get_t_normal_left(DataType t) const;
   tnsr::I<DataType, 3> get_t_normal_right(DataType t) const;
   tnsr::I<DataType, 3> get_t_normal_lr(DataType t) const;
-  // DataType integrate_term(DataType t, size_t i, size_t j, int left_right,
-  // double t0) const;
+  DataType integrate_term(DataType t, size_t i, size_t j, int left_right,
+                          double t0) const;
   Scalar<DataType> get_t_trace_extrinsic_curvature(
       DataType t, Mesh<3> local_mesh,
       InverseJacobian<DataType, 3, Frame::ElementLogical, Frame::Inertial>

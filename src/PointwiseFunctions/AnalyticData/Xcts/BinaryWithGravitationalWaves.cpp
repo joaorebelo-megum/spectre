@@ -4,6 +4,8 @@
 #include "PointwiseFunctions/AnalyticData/Xcts/BinaryWithGravitationalWaves.hpp"
 
 #include <boost/math/interpolators/cubic_hermite.hpp>
+#include <boost/math/quadrature/gauss_kronrod.hpp>
+#include <boost/math/quadrature/trapezoidal.hpp>
 #include <brigand/brigand.hpp>
 
 #include <array>
@@ -22,6 +24,7 @@
 #include "DataStructures/Tensor/Tensor.hpp"
 #include "DataStructures/Tensor/TypeAliases.hpp"
 #include "Elliptic/Systems/Xcts/Tags.hpp"
+#include "NumericalAlgorithms/RootFinding/TOMS748.hpp"
 #include "NumericalAlgorithms/Spectral/Mesh.hpp"
 #include "PointwiseFunctions/AnalyticData/Xcts/CommonVariables.hpp"
 #include "PointwiseFunctions/GeneralRelativity/Christoffel.hpp"
@@ -337,9 +340,107 @@ template <typename DataType>
 tnsr::ii<DataType, 3>
 BinaryWithGravitationalWavesVariables<DataType>::get_t_near_zone_term(
     DataType t) const {
-  // Computation will be added in the future
+  const auto distance_left_t = get_t_distance_left(t);
+  const auto distance_right_t = get_t_distance_right(t);
+  const auto normal_left_t = get_t_normal_left(t);
+  const auto normal_right_t = get_t_normal_right(t);
+  const auto separation_t = get_t_separation(t);
+  const auto momentum_left_t = get_t_momentum_left(t);
+  const auto momentum_right_t = get_t_momentum_right(t);
+  const auto s =
+      get(distance_left_t) + get(distance_right_t) + get(separation_t);
+  const auto normal_lr_t = get_t_normal_lr(t);
   tnsr::ii<DataType, 3> near_zone_term_t{t.size()};
-  std::fill(near_zone_term_t.begin(), near_zone_term_t.end(), 0.);
+  for (size_t i = 0; i < Dim; ++i) {
+    for (size_t j = 0; j <= i; ++j) {
+      near_zone_term_t.get(i, j) =
+          0.25 / (mass_left * get(distance_left_t)) *
+              (2. * momentum_left_t.get(i) * momentum_left_t.get(j) +
+               (3. * get(dot_product(normal_left_t, momentum_left_t)) *
+                    get(dot_product(normal_left_t, momentum_left_t)) -
+                5. * get(dot_product(momentum_left_t, momentum_left_t))) *
+                   normal_left_t.get(i) * normal_left_t.get(j) +
+               6. * get(dot_product(normal_left_t, momentum_left_t)) *
+                   (normal_left_t.get(i) * momentum_left_t.get(j) +
+                    normal_left_t.get(j) * momentum_left_t.get(i))) +
+          0.25 / (mass_right * get(distance_right_t)) *
+              (2. * momentum_right_t.get(i) * momentum_right_t.get(j) +
+               (3. * get(dot_product(normal_right_t, momentum_right_t)) *
+                    get(dot_product(normal_right_t, momentum_right_t)) -
+                5. * get(dot_product(momentum_right_t, momentum_right_t))) *
+                   normal_right_t.get(i) * normal_right_t.get(j) +
+               6. * get(dot_product(normal_right_t, momentum_right_t)) *
+                   (normal_right_t.get(i) * momentum_right_t.get(j) +
+                    normal_right_t.get(j) * momentum_right_t.get(i))) +
+          0.125 * (mass_left * mass_right) *
+              (-32. / s * (1. / get(separation_t) + 1. / s) *
+                   normal_lr_t.get(i) * normal_lr_t.get(j) +
+               2. *
+                   ((get(distance_left_t) + get(distance_right_t)) /
+                        (get(separation_t) * get(separation_t) *
+                         get(separation_t)) +
+                    12. / (s * s)) *
+                   normal_left_t.get(i) * normal_right_t.get(j) +
+               16. *
+                   (2. / (s * s) -
+                    1. / (get(separation_t) * get(separation_t))) *
+                   (normal_left_t.get(i) * normal_lr_t.get(j) +
+                    normal_left_t.get(j) * normal_lr_t.get(i)) +
+               (5. / (get(separation_t) * get(distance_left_t)) -
+                1. /
+                    (get(separation_t) * get(separation_t) *
+                     get(separation_t)) *
+                    ((get(distance_right_t) * get(distance_right_t)) /
+                         get(distance_left_t) +
+                     3. * get(distance_left_t)) -
+                8. / s * (1. / get(distance_left_t) + 1. / s)) *
+                   normal_left_t.get(i) * normal_left_t.get(j) -
+               32. / s * (1. / get(separation_t) + 1. / s) *
+                   normal_lr_t.get(i) * normal_lr_t.get(j) +
+               2. *
+                   ((get(distance_left_t) + get(distance_right_t)) /
+                        (get(separation_t) * get(separation_t) *
+                         get(separation_t)) +
+                    12. / (s * s)) *
+                   normal_right_t.get(i) * normal_left_t.get(j) -
+               16. *
+                   (2. / (s * s) -
+                    1. / (get(separation_t) * get(separation_t))) *
+                   (normal_right_t.get(i) * normal_lr_t.get(j) +
+                    normal_right_t.get(j) * normal_lr_t.get(i)) +
+               (5. / (get(separation_t) * get(distance_right_t)) -
+                1. /
+                    (get(separation_t) * get(separation_t) *
+                     get(separation_t)) *
+                    ((get(distance_left_t) * get(distance_left_t)) /
+                         get(distance_right_t) +
+                     3. * get(distance_right_t)) -
+                8. / s * (1. / get(distance_right_t) + 1. / s)) *
+                   normal_right_t.get(i) * normal_right_t.get(j));
+    }
+    near_zone_term_t.get(i, i) +=
+        0.25 / (mass_left * get(distance_left_t)) *
+            (get(dot_product(momentum_left_t, momentum_left_t)) -
+             5. * get(dot_product(normal_left_t, momentum_left_t)) *
+                 get(dot_product(normal_left_t, momentum_left_t))) +
+        0.25 / (mass_right * get(distance_right_t)) *
+            (get(dot_product(momentum_right_t, momentum_right_t)) -
+             5. * get(dot_product(normal_right_t, momentum_right_t)) *
+                 get(dot_product(normal_right_t, momentum_right_t))) +
+        0.125 * (mass_left * mass_right) *
+            (5. * get(distance_left_t) /
+                 (get(separation_t) * get(separation_t) * get(separation_t)) *
+                 (get(distance_left_t) / get(distance_right_t) - 1.) -
+             17. / (get(separation_t) * get(distance_left_t)) +
+             4. / (get(distance_left_t) * get(distance_right_t)) +
+             8. / s * (1. / get(distance_left_t) + 4. / get(separation_t)) +
+             5. * get(distance_right_t) /
+                 (get(separation_t) * get(separation_t) * get(separation_t)) *
+                 (get(distance_right_t) / get(distance_left_t) - 1.) -
+             17. / (get(separation_t) * get(distance_right_t)) +
+             4. / (get(distance_left_t) * get(distance_right_t)) +
+             8. / s * (1. / get(distance_right_t) + 4. / get(separation_t)));
+  }
   return near_zone_term_t;
 }
 
@@ -347,9 +448,78 @@ template <typename DataType>
 tnsr::ii<DataType, 3>
 BinaryWithGravitationalWavesVariables<DataType>::get_t_present_term(
     DataType t) const {
-  // Computation will be added in the future
+  const auto distance_left_t = get_t_distance_left(t);
+  const auto distance_right_t = get_t_distance_right(t);
+  const auto normal_left_t = get_t_normal_left(t);
+  const auto normal_right_t = get_t_normal_right(t);
+  const auto momentum_left_t = get_t_momentum_left(t);
+  const auto momentum_right_t = get_t_momentum_right(t);
+  const auto separation_t = get_t_separation(t);
+  const auto normal_lr_t = get_t_normal_lr(t);
   tnsr::ii<DataType, 3> present_term_t{t.size()};
-  std::fill(present_term_t.begin(), present_term_t.end(), 0.);
+  tnsr::I<DataType, 3> u1_1(x);
+  tnsr::I<DataType, 3> u1_2(x);
+  tnsr::I<DataType, 3> u2(x);
+  for (size_t i = 0; i < 3; ++i) {
+    u1_1.get(i) = momentum_left_t.get(i) / sqrt(mass_left);
+    u1_2.get(i) = momentum_right_t.get(i) / sqrt(mass_right);
+    u2.get(i) = sqrt(mass_left * mass_right / (2. * get(separation_t))) *
+                normal_lr_t.get(i);
+  }
+  for (size_t i = 0; i < Dim; ++i) {
+    for (size_t j = 0; j <= i; ++j) {
+      present_term_t.get(i, j) =
+          -0.25 / get(distance_left_t) *
+              (2. * u1_1.get(i) * u1_1.get(j) +
+               (3. * get(dot_product(u1_1, normal_left_t)) *
+                    get(dot_product(u1_1, normal_left_t)) -
+                5. * get(dot_product(u1_1, u1_1))) *
+                   normal_left_t.get(i) * normal_left_t.get(j) +
+               6. * get(dot_product(u1_1, normal_left_t)) *
+                   (normal_left_t.get(i) * u1_1.get(j) +
+                    normal_left_t.get(j) * u1_1.get(i)) -
+               2. * u2.get(i) * u2.get(j) -
+               (3. * get(dot_product(u2, normal_left_t)) *
+                    get(dot_product(u2, normal_left_t)) -
+                5. * get(dot_product(u2, u2))) *
+                   normal_left_t.get(i) * normal_left_t.get(j) -
+               6. * get(dot_product(u2, normal_left_t)) *
+                   (normal_left_t.get(i) * u2.get(j) +
+                    normal_left_t.get(j) * u2.get(i))) -
+          0.25 / get(distance_right_t) *
+              (2. * u1_2.get(i) * u1_2.get(j) +
+               (3. * get(dot_product(u1_2, normal_right_t)) *
+                    get(dot_product(u1_2, normal_right_t)) -
+                5. * get(dot_product(u1_2, u1_2))) *
+                   normal_right_t.get(i) * normal_right_t.get(j) +
+               6. * get(dot_product(u1_2, normal_right_t)) *
+                   (normal_right_t.get(i) * u1_2.get(j) +
+                    normal_right_t.get(j) * u1_2.get(i)) -
+               2. * u2.get(i) * u2.get(j) -
+               (3. * get(dot_product(u2, normal_right_t)) *
+                    get(dot_product(u2, normal_right_t)) -
+                5. * get(dot_product(u2, u2))) *
+                   normal_right_t.get(i) * normal_right_t.get(j) -
+               6. * get(dot_product(u2, normal_right_t)) *
+                   (normal_right_t.get(i) * u2.get(j) +
+                    normal_right_t.get(j) * u2.get(i)));
+    }
+    present_term_t.get(i, i) +=
+        -0.25 / get(distance_left_t) *
+            (get(dot_product(u1_1, u1_1)) -
+             5. * get(dot_product(u1_1, normal_left_t)) *
+                 get(dot_product(u1_1, normal_left_t)) -
+             get(dot_product(u2, u2)) +
+             5. * get(dot_product(u2, normal_left_t)) *
+                 get(dot_product(u2, normal_left_t))) -
+        0.25 / get(distance_right_t) *
+            (get(dot_product(u1_2, u1_2)) -
+             5. * get(dot_product(u1_2, normal_right_t)) *
+                 get(dot_product(u1_2, normal_right_t)) -
+             get(dot_product(u2, u2)) +
+             5. * get(dot_product(u2, normal_right_t)) *
+                 get(dot_product(u2, normal_right_t)));
+  }
   return present_term_t;
 }
 
@@ -357,9 +527,116 @@ template <typename DataType>
 tnsr::ii<DataType, 3>
 BinaryWithGravitationalWavesVariables<DataType>::get_t_past_term(
     DataType t) const {
-  // Computation will be added in the future
+  const auto retarded_time_left_t = find_retarded_time_left(t);
+  const auto retarded_time_right_t = find_retarded_time_right(t);
+  DataType distance_left_at_retarded_time_left =
+      get(get_t_distance_left(retarded_time_left_t));
+  DataType distance_right_at_retarded_time_right =
+      get(get_t_distance_right(retarded_time_right_t));
+  DataType separation_at_retarded_time_left =
+      get(get_t_separation(retarded_time_left_t));
+  DataType separation_at_retarded_time_right =
+      get(get_t_separation(retarded_time_right_t));
+  tnsr::I<DataType, 3> momentum_left_at_retarded_time_left =
+      get_t_momentum_left(retarded_time_left_t);
+  tnsr::I<DataType, 3> momentum_right_at_retarded_time_right =
+      get_t_momentum_right(retarded_time_right_t);
+  tnsr::I<DataType, 3> normal_left_at_retarded_time_left =
+      get_t_normal_left(retarded_time_left_t);
+  tnsr::I<DataType, 3> normal_right_at_retarded_time_right =
+      get_t_normal_right(retarded_time_right_t);
+  tnsr::I<DataType, 3> normal_lr_at_retarded_time_left =
+      get_t_normal_lr(retarded_time_left_t);
+  tnsr::I<DataType, 3> normal_lr_at_retarded_time_right =
+      get_t_normal_lr(retarded_time_right_t);
+  tnsr::I<DataType, 3> u1_1{t.size()};
+  tnsr::I<DataType, 3> u1_2{t.size()};
+  tnsr::I<DataType, 3> u2_1{t.size()};
+  tnsr::I<DataType, 3> u2_2{t.size()};
+  for (size_t i = 0; i < 3; ++i) {
+    u1_1.get(i) =
+        momentum_left_at_retarded_time_left.get(i) / std::sqrt(mass_left);
+    u2_1.get(i) =
+        sqrt(mass_left * mass_right / (2. * separation_at_retarded_time_left)) *
+        normal_lr_at_retarded_time_left.get(i);
+
+    u1_2.get(i) =
+        momentum_right_at_retarded_time_right.get(i) / std::sqrt(mass_right);
+    u2_2.get(i) = sqrt(mass_left * mass_right /
+                       (2. * separation_at_retarded_time_right)) *
+                  normal_lr_at_retarded_time_right.get(i);
+  }
   tnsr::ii<DataType, 3> past_term_t{t.size()};
-  std::fill(past_term_t.begin(), past_term_t.end(), 0.);
+  for (size_t i = 0; i < 3; ++i) {
+    for (size_t j = 0; j <= i; ++j) {
+      past_term_t.get(i, j) =
+          1. / (distance_left_at_retarded_time_left) *
+              (4. * u1_1.get(i) * u1_1.get(j) +
+               (2. * get(dot_product(u1_1, u1_1)) +
+                2. * get(dot_product(u1_1, normal_left_at_retarded_time_left)) *
+                    get(dot_product(u1_1, normal_left_at_retarded_time_left))) *
+                   normal_left_at_retarded_time_left.get(i) *
+                   normal_left_at_retarded_time_left.get(j) -
+               4. * get(dot_product(u1_1, normal_left_at_retarded_time_left)) *
+                   (normal_left_at_retarded_time_left.get(i) * u1_1.get(j) +
+                    normal_left_at_retarded_time_left.get(j) * u1_1.get(i))) +
+          1. / (distance_right_at_retarded_time_right) *
+              (4. * u1_2.get(i) * u1_2.get(j) +
+               (2. * get(dot_product(u1_2, u1_2)) +
+                2. *
+                    get(dot_product(u1_2,
+                                    normal_right_at_retarded_time_right)) *
+                    get(dot_product(u1_2,
+                                    normal_right_at_retarded_time_right))) *
+                   normal_right_at_retarded_time_right.get(i) *
+                   normal_right_at_retarded_time_right.get(j) -
+               4. *
+                   get(dot_product(u1_2, normal_right_at_retarded_time_right)) *
+                   (normal_right_at_retarded_time_right.get(i) * u1_2.get(j) +
+                    normal_right_at_retarded_time_right.get(j) * u1_2.get(i))) -
+          1. / (distance_left_at_retarded_time_left) *
+              (4. * u2_1.get(i) * u2_1.get(j) +
+               (2. * get(dot_product(u2_1, u2_1)) +
+                2. * get(dot_product(u2_1, normal_left_at_retarded_time_left)) *
+                    get(dot_product(u2_1, normal_left_at_retarded_time_left))) *
+                   normal_left_at_retarded_time_left.get(i) *
+                   normal_left_at_retarded_time_left.get(j) -
+               4. * get(dot_product(u2_1, normal_left_at_retarded_time_left)) *
+                   (normal_left_at_retarded_time_left.get(i) * u2_1.get(j) +
+                    normal_left_at_retarded_time_left.get(j) * u2_1.get(i))) -
+          1. / (distance_right_at_retarded_time_right) *
+              (4. * u2_2.get(i) * u2_2.get(j) +
+               (2. * get(dot_product(u2_2, u2_2)) +
+                2. *
+                    get(dot_product(u2_2,
+                                    normal_right_at_retarded_time_right)) *
+                    get(dot_product(u2_2,
+                                    normal_right_at_retarded_time_right))) *
+                   normal_right_at_retarded_time_right.get(i) *
+                   normal_right_at_retarded_time_right.get(j) -
+               4. *
+                   get(dot_product(u2_2, normal_right_at_retarded_time_right)) *
+                   (normal_right_at_retarded_time_right.get(i) * u2_2.get(j) +
+                    normal_right_at_retarded_time_right.get(j) * u2_2.get(i)));
+    }
+    past_term_t.get(i, i) +=
+        1. / (distance_left_at_retarded_time_left) *
+            (-2. * get(dot_product(u1_1, u1_1)) +
+             2. * get(dot_product(u1_1, normal_left_at_retarded_time_left)) *
+                 get(dot_product(u1_1, normal_left_at_retarded_time_left))) +
+        1. / (distance_right_at_retarded_time_right) *
+            (-2. * get(dot_product(u1_2, u1_2)) +
+             2. * get(dot_product(u1_2, normal_right_at_retarded_time_right)) *
+                 get(dot_product(u1_2, normal_right_at_retarded_time_right))) -
+        1. / (distance_left_at_retarded_time_left) *
+            (-2. * get(dot_product(u2_1, u2_1)) +
+             2. * get(dot_product(u2_1, normal_left_at_retarded_time_left)) *
+                 get(dot_product(u2_1, normal_left_at_retarded_time_left))) -
+        1. / (distance_right_at_retarded_time_right) *
+            (-2. * get(dot_product(u2_2, u2_2)) +
+             2. * get(dot_product(u2_2, normal_right_at_retarded_time_right)) *
+                 get(dot_product(u2_2, normal_right_at_retarded_time_right)));
+  }
   return past_term_t;
 }
 
@@ -367,9 +644,17 @@ template <typename DataType>
 tnsr::ii<DataType, 3>
 BinaryWithGravitationalWavesVariables<DataType>::get_t_integral_term(
     DataType t) const {
-  // Computation will be added in the future
+  const auto retarded_time_left_t = find_retarded_time_left(t);
+  const auto retarded_time_right_t = find_retarded_time_right(t);
+  const auto t0 = t[0];
   tnsr::ii<DataType, 3> integral_term_t{t.size()};
-  std::fill(integral_term_t.begin(), integral_term_t.end(), 0.);
+  for (size_t i = 0; i < 3; ++i) {
+    for (size_t j = 0; j <= i; ++j) {
+      integral_term_t.get(i, j) =
+          integrate_term(retarded_time_left_t, i, j, -1, t0) +
+          integrate_term(retarded_time_right_t, i, j, 1, t0);
+    }
+  }
   return integral_term_t;
 }
 
@@ -595,24 +880,11 @@ BinaryWithGravitationalWavesVariables<DataType>::get_t_normal_lr(
 template <typename DataType>
 tnsr::aa<DataType, 3> BinaryWithGravitationalWavesVariables<
     DataType>::get_t_boosted_spacetime_metric_left(DataType t) const {
-  const auto& lapse_times_conformal_factor_minus_one =
-      get<Tags::LapseTimesConformalFactorMinusOne<DataType>>(boost_vars[0]);
-  const auto& conformal_factor_minus_one =
-      get<Tags::ConformalFactorMinusOne<DataType>>(boost_vars[0]);
+  const auto& lapse = get<gr::Tags::Lapse<DataType>>(boost_vars[0]);
   const auto& shift =
       get<Tags::ShiftExcess<DataType, 3, Frame::Inertial>>(boost_vars[0]);
-
-  Scalar<DataType> conformal_factor{t.size()};
-  get(conformal_factor) = 1. + get(conformal_factor_minus_one);
-  Scalar<DataType> lapse{t.size()};
-  get(lapse) = (1. + get(lapse_times_conformal_factor_minus_one)) /
-               get(conformal_factor);
-
-  tnsr::ii<DataType, 3> spatial_metric{t.size()};
-  std::fill(spatial_metric.begin(), spatial_metric.end(), 0.);
-  for (size_t i = 0; i < 3; ++i) {
-    spatial_metric.get(i, i) = square(square(get(conformal_factor)));
-  }
+  const auto& spatial_metric =
+      get<gr::Tags::SpatialMetric<DataType, 3, Frame::Inertial>>(boost_vars[0]);
 
   tnsr::aa<DataType, 3> spacetime_metric{t.size()};
   gr::spacetime_metric(make_not_null(&spacetime_metric), lapse, shift,
@@ -652,24 +924,11 @@ tnsr::aa<DataType, 3> BinaryWithGravitationalWavesVariables<
 template <typename DataType>
 tnsr::aa<DataType, 3> BinaryWithGravitationalWavesVariables<
     DataType>::get_t_boosted_spacetime_metric_right(DataType t) const {
-  const auto& lapse_times_conformal_factor_minus_one =
-      get<Tags::LapseTimesConformalFactorMinusOne<DataType>>(boost_vars[1]);
-  const auto& conformal_factor_minus_one =
-      get<Tags::ConformalFactorMinusOne<DataType>>(boost_vars[1]);
+  const auto& lapse = get<gr::Tags::Lapse<DataType>>(boost_vars[1]);
   const auto& shift =
       get<Tags::ShiftExcess<DataType, 3, Frame::Inertial>>(boost_vars[1]);
-
-  Scalar<DataType> conformal_factor{t.size()};
-  get(conformal_factor) = 1. + get(conformal_factor_minus_one);
-  Scalar<DataType> lapse{t.size()};
-  get(lapse) = (1. + get(lapse_times_conformal_factor_minus_one)) /
-               get(conformal_factor);
-
-  tnsr::ii<DataType, 3> spatial_metric{t.size()};
-  std::fill(spatial_metric.begin(), spatial_metric.end(), 0.);
-  for (size_t i = 0; i < 3; ++i) {
-    spatial_metric.get(i, i) = square(square(get(conformal_factor)));
-  }
+  const auto& spatial_metric =
+      get<gr::Tags::SpatialMetric<DataType, 3, Frame::Inertial>>(boost_vars[1]);
 
   tnsr::aa<DataType, 3> spacetime_metric{t.size()};
   gr::spacetime_metric(make_not_null(&spacetime_metric), lapse, shift,
@@ -761,6 +1020,177 @@ void BinaryWithGravitationalWavesVariables<
              past_time.front(), std::abs(past_time.at(0) - past_time.at(1)))
              .domain()
              .second);
+}
+
+template <typename DataType>
+DataType
+BinaryWithGravitationalWavesVariables<DataType>::find_retarded_time_left(
+    DataType t0) const {
+  DataType bracket_lower(get_size(t0), past_time.front());
+  DataType bracket_upper(get_size(t0), present_time[0]);
+  return RootFinder::toms748<true>(
+      [this, t0](const auto time, const size_t i) {
+        tnsr::I<double, 3> v;
+        for (size_t j = 0; j < 3; ++j) {
+          v.get(j) =
+              this->x.get(j)[i] - this->interpolation_position_left.at(j)(time);
+        }
+
+        return get(magnitude(v)) + time - t0[i];
+      },
+      bracket_lower, bracket_upper, 1e-12, 1e-14);
+}
+
+template <typename DataType>
+DataType
+BinaryWithGravitationalWavesVariables<DataType>::find_retarded_time_right(
+    DataType t0) const {
+  DataType bracket_lower(get_size(t0), past_time.front());
+  DataType bracket_upper(get_size(t0), present_time[0]);
+  return RootFinder::toms748<true>(
+      [this, t0](const auto time, const size_t i) {
+        tnsr::I<double, 3> v;
+        for (size_t j = 0; j < 3; ++j) {
+          v.get(j) = this->x.get(j)[i] -
+                     this->interpolation_position_right.at(j)(time);
+        }
+
+        return get(magnitude(v)) + time - t0[i];
+      },
+      bracket_lower, bracket_upper, 1e-12, 1e-14);
+}
+
+template <typename DataType>
+DataType BinaryWithGravitationalWavesVariables<DataType>::integrate_term(
+    const DataType time, const size_t i, const size_t j, const int left_right,
+    const double t0) const {
+  DataType result{time.size()};
+  std::array<std::function<double(double)>, 3> this_interpolation_position{};
+  std::array<std::function<double(double)>, 3> this_interpolation_momentum{};
+  double this_mass(0.);
+  if (left_right == -1) {
+    for (size_t l = 0; l < 3; ++l) {
+      this_interpolation_position.at(l) = interpolation_position_left.at(l);
+      this_interpolation_momentum.at(l) = interpolation_momentum_left.at(l);
+      this_mass = mass_left;
+    }
+  } else if (left_right == 1) {
+    for (size_t l = 0; l < 3; ++l) {
+      this_interpolation_position.at(l) = interpolation_position_right.at(l);
+      this_interpolation_momentum.at(l) = interpolation_momentum_right.at(l);
+      this_mass = mass_right;
+    }
+  }
+  using namespace boost::math::quadrature;
+  // using boost::math::quadrature::trapezoidal;
+  for (size_t k = 0; k < time.size(); ++k) {
+    auto integrand = [this, i, j, k, &this_interpolation_position,
+                      &this_interpolation_momentum,
+                      &this_mass](const double t) {
+      std::array<double, 3> u1{};
+      std::array<double, 3> u2{};
+      const double this_distance_at_t =
+          sqrt(pow(this_interpolation_position.at(0)(t) - x.get(0)[k], 2) +
+               pow(this_interpolation_position.at(1)(t) - x.get(1)[k], 2) +
+               pow(this_interpolation_position.at(2)(t) - x.get(2)[k], 2));
+      const double separation_at_t =
+          sqrt(pow(interpolation_position_left.at(0)(t) -
+                       interpolation_position_right.at(0)(t),
+                   2) +
+               pow(interpolation_position_left.at(1)(t) -
+                       interpolation_position_right.at(1)(t),
+                   2) +
+               pow(interpolation_position_left.at(2)(t) -
+                       interpolation_position_right.at(2)(t),
+                   2));
+      const std::array<double, 3> this_momentum_at_t = {
+          this_interpolation_momentum.at(0)(t),
+          this_interpolation_momentum.at(1)(t),
+          this_interpolation_momentum.at(2)(t)};
+      const std::array<double, 3> this_normal_at_t = {
+          (x.get(0)[k] - this_interpolation_position.at(0)(t)) /
+              this_distance_at_t,
+          (x.get(1)[k] - this_interpolation_position.at(1)(t)) /
+              this_distance_at_t,
+          (x.get(2)[k] - this_interpolation_position.at(2)(t)) /
+              this_distance_at_t};
+      const std::array<double, 3> normal_lr_at_t = {
+          (interpolation_position_left.at(0)(t) -
+           interpolation_position_right.at(0)(t)) /
+              separation_at_t,
+          (interpolation_position_left.at(1)(t) -
+           interpolation_position_right.at(1)(t)) /
+              separation_at_t,
+          (interpolation_position_left.at(2)(t) -
+           interpolation_position_right.at(2)(t)) /
+              separation_at_t};
+      const std::array<std::array<double, 3>, 3> delta{
+          {{{1., 0., 0.}}, {{0., 1., 0.}}, {{0., 0., 1.}}}};
+      for (size_t l = 0; l < 3; ++l) {
+        u1.at(l) = this_momentum_at_t.at(l) / std::sqrt(this_mass);
+        u2.at(l) = sqrt(mass_left * mass_right / (2 * separation_at_t)) *
+                   normal_lr_at_t.at(l);
+      }
+      const double term1 =
+          t / (this_distance_at_t * this_distance_at_t * this_distance_at_t) *
+          ((-5. * dot(u1, u1) +
+            9. * dot(u1, this_normal_at_t) * dot(u1, this_normal_at_t)) *
+               delta.at(i).at(j) +
+           6. * u1.at(i) * u1.at(j) -
+           6. * dot(u1, this_normal_at_t) *
+               (u1.at(i) * this_normal_at_t.at(j) +
+                u1.at(j) * this_normal_at_t.at(i)) +
+           (9. * dot(u1, u1) -
+            15. * dot(u1, this_normal_at_t) * dot(u1, this_normal_at_t)) *
+               this_normal_at_t.at(i) * this_normal_at_t.at(j));
+      const double term2 =
+          t * t * t /
+          (this_distance_at_t * this_distance_at_t * this_distance_at_t *
+           this_distance_at_t * this_distance_at_t) *
+          ((dot(u1, u1) -
+            5. * dot(u1, this_normal_at_t) * dot(u1, this_normal_at_t)) *
+               delta.at(i).at(j) +
+           2. * u1.at(i) * u1.at(j) -
+           10. * dot(u1, this_normal_at_t) *
+               (u1.at(i) * this_normal_at_t.at(j) +
+                u1.at(j) * this_normal_at_t.at(i)) +
+           (-5. * dot(u1, u1) * dot(u1, u1) +
+            35. * dot(u1, this_normal_at_t) * dot(u1, this_normal_at_t)) *
+               this_normal_at_t.at(i) * this_normal_at_t.at(j));
+      const double term3 =
+          t / (this_distance_at_t * this_distance_at_t * this_distance_at_t) *
+          ((-5. * dot(u2, u2) +
+            9. * dot(u2, this_normal_at_t) * dot(u2, this_normal_at_t)) *
+               delta.at(i).at(j) +
+           6. * u2.at(i) * u2.at(j) -
+           6. * dot(u2, this_normal_at_t) *
+               (u2.at(i) * this_normal_at_t.at(j) +
+                u2.at(j) * this_normal_at_t.at(i)) +
+           (9. * dot(u2, u2) -
+            15. * dot(u2, this_normal_at_t) * dot(u2, this_normal_at_t)) *
+               this_normal_at_t.at(i) * this_normal_at_t.at(j));
+      const double term4 =
+          t * t * t /
+          (this_distance_at_t * this_distance_at_t * this_distance_at_t *
+           this_distance_at_t * this_distance_at_t) *
+          ((dot(u2, u2) -
+            5. * dot(u2, this_normal_at_t) * dot(u2, this_normal_at_t)) *
+               delta.at(i).at(j) +
+           2. * u2.at(i) * u2.at(j) -
+           10. * dot(u2, this_normal_at_t) *
+               (u2.at(i) * this_normal_at_t.at(j) +
+                u2.at(j) * this_normal_at_t.at(i)) +
+           (-5. * dot(u2, u2) * dot(u2, u2) +
+            35. * dot(u2, this_normal_at_t) * dot(u2, this_normal_at_t)) *
+               this_normal_at_t.at(i) * this_normal_at_t.at(j));
+      return term1 + term2 - term3 - term4;
+    };
+    double error;
+    result[k] = gauss_kronrod<double, 15>::integrate(integrand, time[k], t0, 5,
+                                                     1e-8, &error);
+    // result[k] = trapezoidal(integrand, time[k], t0, 1e-8, 8);
+  }
+  return result;
 }
 
 template class BinaryWithGravitationalWavesVariables<DataVector>;
