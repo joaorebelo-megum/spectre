@@ -181,7 +181,8 @@ struct BinaryWithGravitationalWavesVariables
           DataType, Dim, Frame::ElementLogical, Frame::Inertial>>>
           local_inv_jacobian,
       const tnsr::I<DataType, 3>& local_x, const double local_mass_left,
-      const double local_mass_right, const double local_attenuation_parameter,
+      const double local_mass_right, const double local_boost_momentum,
+      const double local_attenuation_parameter,
       const double local_attenuation_radius,
       const std::array<std::vector<double>, 3>& local_past_position_left,
       const std::array<std::vector<double>, 3>& local_past_position_right,
@@ -198,6 +199,7 @@ struct BinaryWithGravitationalWavesVariables
         x(local_x),
         mass_left(local_mass_left),
         mass_right(local_mass_right),
+        boost_momentum(local_boost_momentum),
         attenuation_parameter(local_attenuation_parameter),
         attenuation_radius(local_attenuation_radius),
         past_position_left(local_past_position_left),
@@ -220,6 +222,7 @@ struct BinaryWithGravitationalWavesVariables
   const tnsr::I<DataType, 3>& x;
   const double mass_left;
   const double mass_right;
+  const double boost_momentum;
   const double attenuation_parameter;
   const double attenuation_radius;
   const std::array<double, 3> normal_lr{{-1., 0., 0.}};
@@ -622,6 +625,11 @@ class BinaryWithGravitationalWaves
         "The coordinates on the x-axis of the right black hole.";
     using type = double;
   };
+  struct BoostMomentum {
+    static constexpr Options::String help =
+        "Bla Bla";
+    using type = double;
+  };
   struct AttenuationParameter {
     static constexpr Options::String help =
         "The parameter controlling the transition width of the attenuation "
@@ -645,8 +653,9 @@ class BinaryWithGravitationalWaves
     using type = bool;
   };
   using options = tmpl::list<MassLeft, MassRight, XCoordsLeft, XCoordsRight,
-                             AttenuationParameter, AttenuationRadius,
-                             OuterRadius, WriteEvolutionOption>;
+                             BoostMomentum, AttenuationParameter,
+                             AttenuationRadius, OuterRadius,
+                             WriteEvolutionOption>;
   static constexpr Options::String help =
       "Binary black hole initial data with realistic wave background, "
       "constructed in Post-Newtonian approximations. ";
@@ -662,6 +671,7 @@ class BinaryWithGravitationalWaves
 
   BinaryWithGravitationalWaves(double mass_left, double mass_right,
                                double xcoord_left, double xcoord_right,
+                               double boost_momentum,
                                double attenuation_parameter,
                                double attenuation_radius, double outer_radius,
                                bool write_evolution_option,
@@ -670,6 +680,7 @@ class BinaryWithGravitationalWaves
         mass_right_(mass_right),
         xcoord_left_(xcoord_left),
         xcoord_right_(xcoord_right),
+        boost_momentum_(boost_momentum),
         attenuation_parameter_(attenuation_parameter),
         attenuation_radius_(attenuation_radius),
         outer_radius_(outer_radius),
@@ -734,6 +745,7 @@ class BinaryWithGravitationalWaves
     p | mass_right_;
     p | xcoord_left_;
     p | xcoord_right_;
+    p | boost_momentum_;
     p | attenuation_parameter_;
     p | attenuation_radius_;
     p | write_evolution_option_;
@@ -779,6 +791,7 @@ class BinaryWithGravitationalWaves
   double mass_right_ = std::numeric_limits<double>::signaling_NaN();
   double xcoord_left_ = std::numeric_limits<double>::signaling_NaN();
   double xcoord_right_ = std::numeric_limits<double>::signaling_NaN();
+  double boost_momentum_ = std::numeric_limits<double>::signaling_NaN();
   double ymomentum_left_ = std::numeric_limits<double>::signaling_NaN();
   double ymomentum_right_ = std::numeric_limits<double>::signaling_NaN();
   double attenuation_parameter_ = std::numeric_limits<double>::signaling_NaN();
@@ -802,6 +815,7 @@ class BinaryWithGravitationalWaves
                                 x,
                                 mass_left_,
                                 mass_right_,
+                                boost_momentum_,
                                 attenuation_parameter_,
                                 attenuation_radius_,
                                 past_position_left_,

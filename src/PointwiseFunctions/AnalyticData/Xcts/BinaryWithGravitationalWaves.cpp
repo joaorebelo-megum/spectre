@@ -1720,10 +1720,10 @@ Scalar<DataType> BinaryWithGravitationalWavesVariables<DataType>::get_t_lapse(
 
   // PN Lapse
   /**/
-  const auto conformal_factor_t = get_t_conformal_factor(t);
-  get(lapse_t) = (2. - get(conformal_factor_t)) /
-  get(conformal_factor_t);
-  * / const auto distance_left_t = get_t_distance_left(t);
+  // const auto conformal_factor_t = get_t_conformal_factor(t);
+  // get(lapse_t) = (2. - get(conformal_factor_t)) /
+  // get(conformal_factor_t);
+  const auto distance_left_t = get_t_distance_left(t);
   const auto distance_right_t = get_t_distance_right(t);
   const auto separation_t = get_t_separation(t);
   const auto momentum_left_t = get_t_momentum_left(t);
@@ -1926,9 +1926,14 @@ BinaryWithGravitationalWavesVariables<DataType>::get_t_boosted_distance_left(
   // Horizon Penetrating Coordinates
   const auto momentum_left_t = get_t_momentum_left(t);
   tnsr::I<DataType, 3, Frame::NoFrame> boost_velocity{t.size()};
+  /*
   for (size_t i = 0; i < 3; ++i) {
     boost_velocity.get(i) = -momentum_left_t.get(i) / mass_left;
   }
+  */
+  boost_velocity.get(0) = 0.;
+  boost_velocity.get(1) = -boost_momentum / mass_left;
+  boost_velocity.get(2) = 0.;
   const DataType velocity_squared{
       get(dot_product(boost_velocity, boost_velocity))};
   const DataType lorentz_factor{1.0 / sqrt(1.0 - velocity_squared)};
@@ -1974,9 +1979,14 @@ BinaryWithGravitationalWavesVariables<DataType>::get_t_boosted_distance_right(
   // Horizon Penetrating Coordinates (boost with negative velocity)
   const auto momentum_right_t = get_t_momentum_right(t);
   tnsr::I<DataType, 3, Frame::NoFrame> boost_velocity{t.size()};
+  /*
   for (size_t i = 0; i < 3; ++i) {
     boost_velocity.get(i) = -momentum_right_t.get(i) / mass_right;
   }
+  */
+  boost_velocity.get(0) = 0.;
+  boost_velocity.get(1) = -boost_momentum / mass_right;
+  boost_velocity.get(2) = 0.;
   const DataType velocity_squared{
       get(dot_product(boost_velocity, boost_velocity))};
   const DataType lorentz_factor{1.0 / sqrt(1.0 - velocity_squared)};
@@ -2022,9 +2032,14 @@ BinaryWithGravitationalWavesVariables<DataType>::get_t_boosted_normal_left(
   // Horizon Penetrating Coordinates
   const auto momentum_left_t = get_t_momentum_left(t);
   tnsr::I<DataType, 3, Frame::NoFrame> boost_velocity{t.size()};
+  /*
   for (size_t i = 0; i < 3; ++i) {
     boost_velocity.get(i) = -momentum_left_t.get(i) / mass_left;
   }
+  */
+  boost_velocity.get(0) = 0.;
+  boost_velocity.get(1) = -boost_momentum / mass_left;
+  boost_velocity.get(2) = 0.;
   const DataType velocity_squared{
       get(dot_product(boost_velocity, boost_velocity))};
   const DataType lorentz_factor{1.0 / sqrt(1.0 - velocity_squared)};
@@ -2072,9 +2087,14 @@ BinaryWithGravitationalWavesVariables<DataType>::get_t_boosted_normal_right(
   // Horizon Penetrating Coordinates (boost with negative velocity)
   const auto momentum_right_t = get_t_momentum_right(t);
   tnsr::I<DataType, 3, Frame::NoFrame> boost_velocity{t.size()};
+  /*
   for (size_t i = 0; i < 3; ++i) {
     boost_velocity.get(i) = -momentum_right_t.get(i) / mass_right;
   }
+  */
+  boost_velocity.get(0) = 0.;
+  boost_velocity.get(1) = -boost_momentum / mass_right;
+  boost_velocity.get(2) = 0.;
   const DataType velocity_squared{
       get(dot_product(boost_velocity, boost_velocity))};
   const DataType lorentz_factor{1.0 / sqrt(1.0 - velocity_squared)};
@@ -2164,7 +2184,6 @@ tnsr::aa<DataType, 3> BinaryWithGravitationalWavesVariables<
     shift.get(i) = square(2. * mass_left / (mass_left + get(distance_left_t))) *
                    normal_left_t.get(i) / get(gamma_rr);
   }
-
   // Schwarzschild Harmonic Coordinates spatial metric
   tnsr::ii<DataType, 3> spatial_metric{t.size()};
   for (size_t i = 0; i < 3; ++i) {
@@ -2181,9 +2200,14 @@ tnsr::aa<DataType, 3> BinaryWithGravitationalWavesVariables<
                        spatial_metric);
 
   tnsr::I<DataType, 3, Frame::NoFrame> boost_velocity{t.size()};
+  /*
   for (size_t i = 0; i < 3; ++i) {
     boost_velocity.get(i) = -momentum_left_t.get(i) / mass_left;
   }
+  */
+  boost_velocity.get(0) = 0.;
+  boost_velocity.get(1) = -boost_momentum / mass_left;
+  boost_velocity.get(2) = 0.;
   const DataType velocity_squared{
       get(dot_product(boost_velocity, boost_velocity))};
   const DataType lorentz_factor{1.0 / sqrt(1.0 - velocity_squared)};
@@ -2296,9 +2320,14 @@ tnsr::aa<DataType, 3> BinaryWithGravitationalWavesVariables<
                        spatial_metric);
 
   tnsr::I<DataType, 3, Frame::NoFrame> boost_velocity{t.size()};
+  /*
   for (size_t i = 0; i < 3; ++i) {
     boost_velocity.get(i) = -momentum_right_t.get(i) / mass_right;
   }
+  */
+  boost_velocity.get(0) = 0.;
+  boost_velocity.get(1) = -boost_momentum / mass_right;
+  boost_velocity.get(2) = 0.;
   const DataType velocity_squared{
       get(dot_product(boost_velocity, boost_velocity))};
   const DataType lorentz_factor{1.0 / sqrt(1.0 - velocity_squared)};
