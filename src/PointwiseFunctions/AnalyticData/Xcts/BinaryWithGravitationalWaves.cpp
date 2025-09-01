@@ -7,6 +7,7 @@
 #include <boost/math/quadrature/gauss_kronrod.hpp>
 #include <boost/math/quadrature/trapezoidal.hpp>
 #include <cstddef>
+#include <fstream>
 
 #include "DataStructures/BoostMultiArray.hpp"
 #include "DataStructures/DataBox/Prefixes.hpp"

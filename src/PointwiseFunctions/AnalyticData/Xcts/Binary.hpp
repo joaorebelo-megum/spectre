@@ -45,8 +45,6 @@ template <typename DataType>
 using BinaryVariablesCache = cached_temp_buffer_from_typelist<tmpl::append<
     common_tags<DataType>,
     tmpl::list<
-        ::Tags::deriv<Xcts::Tags::ShiftBackground<DataType, 3, Frame::Inertial>,
-                      tmpl::size_t<3>, Frame::Inertial>,
         gr::Tags::Conformal<gr::Tags::EnergyDensity<DataType>, 0>,
         gr::Tags::Conformal<gr::Tags::StressTrace<DataType>, 0>,
         gr::Tags::Conformal<gr::Tags::MomentumDensity<DataType, 3>, 0>,
@@ -174,12 +172,8 @@ struct BinaryVariables
       gsl::not_null<tnsr::iJ<DataType, Dim>*> deriv_shift_background,
       gsl::not_null<Cache*> cache,
       ::Tags::deriv<Xcts::Tags::ShiftBackground<DataType, Dim, Frame::Inertial>,
-                    tmpl::size_t<Dim>, Frame::Inertial> /*meta*/) const;
-  void operator()(gsl::not_null<tnsr::II<DataType, Dim, Frame::Inertial>*>
-                      longitudinal_shift_background_minus_dt_conformal_metric,
-                  gsl::not_null<Cache*> cache,
-                  Xcts::Tags::LongitudinalShiftBackgroundMinusDtConformalMetric<
-                      DataType, Dim, Frame::Inertial> /*meta*/) const override;
+                    tmpl::size_t<Dim>, Frame::Inertial> /*meta*/)
+      const override;
   void operator()(
       const gsl::not_null<Scalar<DataType>*> conformal_energy_density,
       const gsl::not_null<Cache*> cache,

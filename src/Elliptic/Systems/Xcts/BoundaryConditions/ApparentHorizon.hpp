@@ -124,7 +124,7 @@ class ApparentHorizon
   };
   struct Lapse {
     using type = Options::Auto<
-        std::unique_ptr<elliptic::analytic_data::AnalyticSolution>,
+        std::unique_ptr<elliptic::analytic_data::InitialGuess>,
         Options::AutoLabel::None>;
     static constexpr Options::String help =
         "Specify an analytic solution or a superposed binary to impose a "

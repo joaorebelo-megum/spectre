@@ -144,9 +144,6 @@ using BinaryWithGravitationalWavesVariablesCache =
             detail::Tags::RetardedTimeRight<DataType>,
             detail::Tags::RootFinderBracketTimeLower<DataType>,
             detail::Tags::RootFinderBracketTimeUpper<DataType>,
-            ::Tags::deriv<
-                Xcts::Tags::ShiftBackground<DataType, 3, Frame::Inertial>,
-                tmpl::size_t<3>, Frame::Inertial>,
             gr::Tags::Conformal<gr::Tags::EnergyDensity<DataType>, 0>,
             gr::Tags::Conformal<gr::Tags::StressTrace<DataType>, 0>,
             gr::Tags::Conformal<gr::Tags::MomentumDensity<DataType, 3>, 0>,
@@ -352,7 +349,8 @@ struct BinaryWithGravitationalWavesVariables
       gsl::not_null<tnsr::iJ<DataType, Dim>*> deriv_shift_background,
       gsl::not_null<Cache*> cache,
       ::Tags::deriv<Xcts::Tags::ShiftBackground<DataType, Dim, Frame::Inertial>,
-                    tmpl::size_t<Dim>, Frame::Inertial> /*meta*/) const;
+                    tmpl::size_t<Dim>, Frame::Inertial> /*meta*/)
+      const override;
   void operator()(
       gsl::not_null<Scalar<DataType>*> conformal_energy_density,
       gsl::not_null<Cache*> /*cache*/,
