@@ -65,7 +65,12 @@ class InnerForBwGW : public elliptic::BoundaryConditions::BoundaryCondition<3> {
   struct BoostMomentum {
     static constexpr Options::String help =
         "Bla Bla";
-    using type = double;
+    using type = std::array<double, 3>;
+  };
+  struct PNMomentum {
+    static constexpr Options::String help =
+        "The initial Post-Newtonian momentum of the black holes.";
+    using type = std::array<double, 3>;
   };
   struct AttenuationParameter {
     static constexpr Options::String help =
@@ -88,9 +93,8 @@ class InnerForBwGW : public elliptic::BoundaryConditions::BoundaryCondition<3> {
     using type = elliptic::BoundaryConditionType;
   };
   using options = tmpl::list<MassLeft, MassRight, XCoordsLeft, XCoordsRight,
-                             BoostMomentum, AttenuationParameter,
-                             AttenuationRadius, OuterRadius,
-                             BoundaryCondition>;
+                             BoostMomentum, PNMomentum, AttenuationParameter,
+                             AttenuationRadius, OuterRadius, BoundaryCondition>;
   static constexpr Options::String help =
       "Impose Schwarzschild isotropic in Inner Boundary.";
 
@@ -111,12 +115,13 @@ class InnerForBwGW : public elliptic::BoundaryConditions::BoundaryCondition<3> {
       const override {
     return std::make_unique<InnerForBwGW>(
         mass_left_, mass_right_, xcoord_left_, xcoord_right_, boost_momentum_,
-        attenuation_parameter_, attenuation_radius_, outer_radius_, boundary_);
+        pn_momentum_, attenuation_parameter_, attenuation_radius_,
+        outer_radius_, boundary_);
   }
 
   InnerForBwGW(double mass_left, double mass_right, double xcoord_left,
-               double xcoord_right, double boost_momentum,
-               double attenuation_parameter,
+               double xcoord_right, std::array<double, 3> boost_momentum,
+               std::array<double, 3> pn_momentum, double attenuation_parameter,
                double attenuation_radius, double outer_radius,
                elliptic::BoundaryConditionType boundary,
                const Options::Context& context = {});
@@ -182,7 +187,14 @@ class InnerForBwGW : public elliptic::BoundaryConditions::BoundaryCondition<3> {
   double mass_right_{std::numeric_limits<double>::signaling_NaN()};
   double xcoord_left_{std::numeric_limits<double>::signaling_NaN()};
   double xcoord_right_{std::numeric_limits<double>::signaling_NaN()};
-  double boost_momentum_{std::numeric_limits<double>::signaling_NaN()};
+  std::array<double, 3> boost_momentum_{
+      {std::numeric_limits<double>::signaling_NaN(),
+       std::numeric_limits<double>::signaling_NaN(),
+       std::numeric_limits<double>::signaling_NaN()}};
+  std::array<double, 3> pn_momentum_{
+      {std::numeric_limits<double>::signaling_NaN(),
+       std::numeric_limits<double>::signaling_NaN(),
+       std::numeric_limits<double>::signaling_NaN()}};
   double attenuation_parameter_{std::numeric_limits<double>::signaling_NaN()};
   double attenuation_radius_{std::numeric_limits<double>::signaling_NaN()};
   double outer_radius_{std::numeric_limits<double>::signaling_NaN()};

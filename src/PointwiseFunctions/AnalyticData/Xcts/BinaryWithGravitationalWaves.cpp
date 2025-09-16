@@ -1932,9 +1932,9 @@ BinaryWithGravitationalWavesVariables<DataType>::get_t_boosted_distance_left(
     boost_velocity.get(i) = -momentum_left_t.get(i) / mass_left;
   }
   */
-  boost_velocity.get(0) = 0.;
-  boost_velocity.get(1) = boost_momentum / mass_left;
-  boost_velocity.get(2) = 0.;
+  boost_velocity.get(0) = boost_momentum[0] / mass_left;
+  boost_velocity.get(1) = boost_momentum[1] / mass_left;
+  boost_velocity.get(2) = boost_momentum[2] / mass_left;
   const DataType velocity_squared{
       get(dot_product(boost_velocity, boost_velocity))};
   const DataType lorentz_factor{1.0 / sqrt(1.0 - velocity_squared)};
@@ -1985,9 +1985,9 @@ BinaryWithGravitationalWavesVariables<DataType>::get_t_boosted_distance_right(
     boost_velocity.get(i) = -momentum_right_t.get(i) / mass_right;
   }
   */
-  boost_velocity.get(0) = 0.;
-  boost_velocity.get(1) = -boost_momentum / mass_right;
-  boost_velocity.get(2) = 0.;
+  boost_velocity.get(0) = -boost_momentum[0] / mass_right;
+  boost_velocity.get(1) = -boost_momentum[1] / mass_right;
+  boost_velocity.get(2) = -boost_momentum[2] / mass_right;
   const DataType velocity_squared{
       get(dot_product(boost_velocity, boost_velocity))};
   const DataType lorentz_factor{1.0 / sqrt(1.0 - velocity_squared)};
@@ -2038,9 +2038,9 @@ BinaryWithGravitationalWavesVariables<DataType>::get_t_boosted_normal_left(
     boost_velocity.get(i) = -momentum_left_t.get(i) / mass_left;
   }
   */
-  boost_velocity.get(0) = 0.;
-  boost_velocity.get(1) = boost_momentum / mass_left;
-  boost_velocity.get(2) = 0.;
+  boost_velocity.get(0) = boost_momentum[0] / mass_left;
+  boost_velocity.get(1) = boost_momentum[1] / mass_left;
+  boost_velocity.get(2) = boost_momentum[2] / mass_left;
   const DataType velocity_squared{
       get(dot_product(boost_velocity, boost_velocity))};
   const DataType lorentz_factor{1.0 / sqrt(1.0 - velocity_squared)};
@@ -2093,9 +2093,9 @@ BinaryWithGravitationalWavesVariables<DataType>::get_t_boosted_normal_right(
     boost_velocity.get(i) = -momentum_right_t.get(i) / mass_right;
   }
   */
-  boost_velocity.get(0) = 0.;
-  boost_velocity.get(1) = -boost_momentum / mass_right;
-  boost_velocity.get(2) = 0.;
+  boost_velocity.get(0) = -boost_momentum[0] / mass_right;
+  boost_velocity.get(1) = -boost_momentum[1] / mass_right;
+  boost_velocity.get(2) = -boost_momentum[2] / mass_right;
   const DataType velocity_squared{
       get(dot_product(boost_velocity, boost_velocity))};
   const DataType lorentz_factor{1.0 / sqrt(1.0 - velocity_squared)};
@@ -2206,9 +2206,9 @@ tnsr::aa<DataType, 3> BinaryWithGravitationalWavesVariables<
     boost_velocity.get(i) = -momentum_left_t.get(i) / mass_left;
   }
   */
-  boost_velocity.get(0) = 0.;
-  boost_velocity.get(1) = boost_momentum / mass_left;
-  boost_velocity.get(2) = 0.;
+  boost_velocity.get(0) = boost_momentum[0] / mass_left;
+  boost_velocity.get(1) = boost_momentum[1] / mass_left;
+  boost_velocity.get(2) = boost_momentum[2] / mass_left;
   const DataType velocity_squared{
       get(dot_product(boost_velocity, boost_velocity))};
   const DataType lorentz_factor{1.0 / sqrt(1.0 - velocity_squared)};
@@ -2326,9 +2326,9 @@ tnsr::aa<DataType, 3> BinaryWithGravitationalWavesVariables<
     boost_velocity.get(i) = -momentum_right_t.get(i) / mass_right;
   }
   */
-  boost_velocity.get(0) = 0.;
-  boost_velocity.get(1) = -boost_momentum / mass_right;
-  boost_velocity.get(2) = 0.;
+  boost_velocity.get(0) = -boost_momentum[0] / mass_right;
+  boost_velocity.get(1) = -boost_momentum[1] / mass_right;
+  boost_velocity.get(2) = -boost_momentum[2] / mass_right;
   const DataType velocity_squared{
       get(dot_product(boost_velocity, boost_velocity))};
   const DataType lorentz_factor{1.0 / sqrt(1.0 - velocity_squared)};
@@ -2429,7 +2429,7 @@ void BinaryWithGravitationalWaves::initialize() {
   reduced_mass = mass_left() * mass_right() / total_mass;
   reduced_mass_over_total_mass = reduced_mass / total_mass;
 
-  double p_circular_squared =
+  /*double p_circular_squared =
       reduced_mass * reduced_mass * total_mass / separation +
       4. * reduced_mass * reduced_mass * total_mass * total_mass /
           (separation * separation) +
@@ -2438,9 +2438,12 @@ void BinaryWithGravitationalWaves::initialize() {
           (8. * separation * separation * separation);
   ymomentum_left_ = sqrt(p_circular_squared);
   ymomentum_right_ = -sqrt(p_circular_squared);
+  */
 
   initial_state_position = {{separation / total_mass, 0., 0.}};
-  initial_state_momentum = {{0., ymomentum_right_ / reduced_mass, 0.}};
+  initial_state_momentum = {{-pn_momentum_[0] / reduced_mass,
+                             -pn_momentum_[1] / reduced_mass,
+                             -pn_momentum_[2] / reduced_mass}};
 
   time_step = .01;
   initial_time = 0.;

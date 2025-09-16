@@ -178,7 +178,9 @@ struct BinaryWithGravitationalWavesVariables
           DataType, Dim, Frame::ElementLogical, Frame::Inertial>>>
           local_inv_jacobian,
       const tnsr::I<DataType, 3>& local_x, const double local_mass_left,
-      const double local_mass_right, const double local_boost_momentum,
+      const double local_mass_right,
+      const std::array<double, 3> local_boost_momentum,
+      const std::array<double, 3> local_pn_momentum,
       const double local_attenuation_parameter,
       const double local_attenuation_radius,
       const std::array<std::vector<double>, 3>& local_past_position_left,
@@ -197,6 +199,7 @@ struct BinaryWithGravitationalWavesVariables
         mass_left(local_mass_left),
         mass_right(local_mass_right),
         boost_momentum(local_boost_momentum),
+        pn_momentum(local_pn_momentum),
         attenuation_parameter(local_attenuation_parameter),
         attenuation_radius(local_attenuation_radius),
         past_position_left(local_past_position_left),
@@ -219,7 +222,8 @@ struct BinaryWithGravitationalWavesVariables
   const tnsr::I<DataType, 3>& x;
   const double mass_left;
   const double mass_right;
-  const double boost_momentum;
+  const std::array<double, 3> boost_momentum;
+  const std::array<double, 3> pn_momentum;
   const double attenuation_parameter;
   const double attenuation_radius;
   const std::array<double, 3> normal_lr{{-1., 0., 0.}};
@@ -625,8 +629,13 @@ class BinaryWithGravitationalWaves
   };
   struct BoostMomentum {
     static constexpr Options::String help =
-        "Bla Bla";
-    using type = double;
+        "The initial boost momentum of the black holes.";
+    using type = std::array<double, 3>;
+  };
+  struct PNMomentum {
+    static constexpr Options::String help =
+        "The initial Post-Newtonian momentum of the black holes.";
+    using type = std::array<double, 3>;
   };
   struct AttenuationParameter {
     static constexpr Options::String help =
@@ -650,10 +659,10 @@ class BinaryWithGravitationalWaves
         "Option to write the evolution of the past history to a file.";
     using type = bool;
   };
-  using options = tmpl::list<MassLeft, MassRight, XCoordsLeft, XCoordsRight,
-                             BoostMomentum, AttenuationParameter,
-                             AttenuationRadius, OuterRadius,
-                             WriteEvolutionOption>;
+  using options =
+      tmpl::list<MassLeft, MassRight, XCoordsLeft, XCoordsRight, BoostMomentum,
+                 PNMomentum, AttenuationParameter, AttenuationRadius,
+                 OuterRadius, WriteEvolutionOption>;
   static constexpr Options::String help =
       "Binary black hole initial data with realistic wave background, "
       "constructed in Post-Newtonian approximations. ";
@@ -669,7 +678,8 @@ class BinaryWithGravitationalWaves
 
   BinaryWithGravitationalWaves(double mass_left, double mass_right,
                                double xcoord_left, double xcoord_right,
-                               double boost_momentum,
+                               std::array<double, 3> boost_momentum,
+                               std::array<double, 3> pn_momentum,
                                double attenuation_parameter,
                                double attenuation_radius, double outer_radius,
                                bool write_evolution_option,
@@ -679,6 +689,7 @@ class BinaryWithGravitationalWaves
         xcoord_left_(xcoord_left),
         xcoord_right_(xcoord_right),
         boost_momentum_(boost_momentum),
+        pn_momentum_(pn_momentum),
         attenuation_parameter_(attenuation_parameter),
         attenuation_radius_(attenuation_radius),
         outer_radius_(outer_radius),
@@ -744,6 +755,7 @@ class BinaryWithGravitationalWaves
     p | xcoord_left_;
     p | xcoord_right_;
     p | boost_momentum_;
+    p | pn_momentum_;
     p | attenuation_parameter_;
     p | attenuation_radius_;
     p | write_evolution_option_;
@@ -789,7 +801,14 @@ class BinaryWithGravitationalWaves
   double mass_right_ = std::numeric_limits<double>::signaling_NaN();
   double xcoord_left_ = std::numeric_limits<double>::signaling_NaN();
   double xcoord_right_ = std::numeric_limits<double>::signaling_NaN();
-  double boost_momentum_ = std::numeric_limits<double>::signaling_NaN();
+  std::array<double, 3> boost_momentum_ = {
+      std::numeric_limits<double>::signaling_NaN(),
+      std::numeric_limits<double>::signaling_NaN(),
+      std::numeric_limits<double>::signaling_NaN()};
+  std::array<double, 3> pn_momentum_ = {
+      std::numeric_limits<double>::signaling_NaN(),
+      std::numeric_limits<double>::signaling_NaN(),
+      std::numeric_limits<double>::signaling_NaN()};
   double ymomentum_left_ = std::numeric_limits<double>::signaling_NaN();
   double ymomentum_right_ = std::numeric_limits<double>::signaling_NaN();
   double attenuation_parameter_ = std::numeric_limits<double>::signaling_NaN();
@@ -814,6 +833,7 @@ class BinaryWithGravitationalWaves
                                 mass_left_,
                                 mass_right_,
                                 boost_momentum_,
+                                pn_momentum_,
                                 attenuation_parameter_,
                                 attenuation_radius_,
                                 past_position_left_,
