@@ -25,7 +25,9 @@ Background: &background
     MassRight: &mass_right 1.
     XCoordsLeft: &x_left -8.
     XCoordsRight: &x_right 8.
-    AttenuationParameter: 1.
+    BoostMomentum: &boost_momentum [0., 0., 0.]
+    AttenuationParameter: &att_par 1.5
+    AttenuationRadius: &att_rad 2.
     OuterRadius: &outer_radius 400.
     WriteEvolutionOption: True
 
@@ -41,14 +43,15 @@ DomainCreator:
       XCoord: *x_right
       Interior:
         ExciseWithBoundaryCondition:
-          ApparentHorizon:
-            Center: [*x_right, 0., 0.]
-            Rotation: [0., 0., 0.]
-            Lapse: &bh_right
-              Schwarzschild:
-                Mass: *mass_right
-                Coordinates: Isotropic
-            NegativeExpansion: *bh_right
+          InnerForBwGW:
+            MassLeft: *mass_left
+            MassRight:  *mass_right
+            XCoordsLeft: *x_left
+            XCoordsRight: *x_right
+            AttenuationParameter: *att_par
+            AttenuationRadius: *att_rad
+            OuterRadius: *outer_radius
+            BoundaryCondition: Dirichlet
       UseLogarithmicMap: True
     ObjectB:
       InnerRadius: 0.4
@@ -56,14 +59,15 @@ DomainCreator:
       XCoord: *x_left
       Interior:
         ExciseWithBoundaryCondition:
-          ApparentHorizon:
-            Center: [*x_left, 0., 0.]
-            Rotation: [0., 0., 0.]
-            Lapse: &bh_left
-              Schwarzschild:
-                Mass: *mass_left
-                Coordinates: Isotropic
-            NegativeExpansion: *bh_left
+          InnerForBwGW:
+            MassLeft: *mass_left
+            MassRight:  *mass_right
+            XCoordsLeft: *x_left
+            XCoordsRight: *x_right
+            AttenuationParameter: *att_par
+            AttenuationRadius: *att_rad
+            OuterRadius: *outer_radius
+            BoundaryCondition: Dirichlet
       UseLogarithmicMap: True
     Envelope:
       Radius: &outer_shell_inner_radius 100.

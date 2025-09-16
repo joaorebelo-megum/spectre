@@ -1933,7 +1933,7 @@ BinaryWithGravitationalWavesVariables<DataType>::get_t_boosted_distance_left(
   }
   */
   boost_velocity.get(0) = 0.;
-  boost_velocity.get(1) = -boost_momentum / mass_left;
+  boost_velocity.get(1) = boost_momentum / mass_left;
   boost_velocity.get(2) = 0.;
   const DataType velocity_squared{
       get(dot_product(boost_velocity, boost_velocity))};
@@ -2039,7 +2039,7 @@ BinaryWithGravitationalWavesVariables<DataType>::get_t_boosted_normal_left(
   }
   */
   boost_velocity.get(0) = 0.;
-  boost_velocity.get(1) = -boost_momentum / mass_left;
+  boost_velocity.get(1) = boost_momentum / mass_left;
   boost_velocity.get(2) = 0.;
   const DataType velocity_squared{
       get(dot_product(boost_velocity, boost_velocity))};
@@ -2207,7 +2207,7 @@ tnsr::aa<DataType, 3> BinaryWithGravitationalWavesVariables<
   }
   */
   boost_velocity.get(0) = 0.;
-  boost_velocity.get(1) = -boost_momentum / mass_left;
+  boost_velocity.get(1) = boost_momentum / mass_left;
   boost_velocity.get(2) = 0.;
   const DataType velocity_squared{
       get(dot_product(boost_velocity, boost_velocity))};
@@ -2710,14 +2710,16 @@ void BinaryWithGravitationalWaves::hamiltonian_system(
                       (20. + 3. * reduced_mass_over_total_mass))) /
       (8. * std::sqrt(qdotq * qdotq * qdotq * qdotq * qdotq * qdotq * qdotq));
   double dH_dq0_3 =
-      (3. / 2. * qdotp * qdotq *
-           (x[0] * (x[1] * x[4] + x[2] * x[5]) -
-            x[3] * (x[1] * x[1] + x[2] * x[2])) *
-           reduced_mass_over_total_mass *
-           (340. + 3. * M_PI * M_PI + 112. * reduced_mass_over_total_mass) +
-       2. * x[0] * std::sqrt(qdotq * qdotq * qdotq) *
-           (-12. + (-872. + 63. * M_PI * M_PI) * reduced_mass_over_total_mass) -
-       6. * qdotp * reduced_mass_over_total_mass *
+      1. / 192. *
+      (6. *
+           (qdotp * (x[0] * qdotp - x[3] * qdotq) *
+            reduced_mass_over_total_mass *
+            (340. + 3. * M_PI * M_PI + 112. * reduced_mass_over_total_mass)) /
+           sqrt(qdotq * qdotq * qdotq * qdotq * qdotq * qdotq * qdotq) +
+       8. * x[0] *
+           (-12. + (-872. + 63. * M_PI * M_PI) * reduced_mass_over_total_mass) /
+           (qdotq * qdotq * qdotq) -
+       24. * qdotp * reduced_mass_over_total_mass *
            reduced_mass_over_total_mass *
            (pdotp * pdotp * x[0] * qdotp * qdotq * qdotq *
                 (2. - 3. * reduced_mass_over_total_mass) -
@@ -2730,8 +2732,10 @@ void BinaryWithGravitationalWaves::hamiltonian_system(
             15. * x[3] * qdotp * qdotp * qdotp * qdotp * qdotq *
                 reduced_mass_over_total_mass +
             x[3] * pdotp * pdotp * qdotq * qdotq * qdotq *
-                (-2. + 3. * reduced_mass_over_total_mass)) -
-       2. * qdotp * std::sqrt(qdotq) * reduced_mass_over_total_mass *
+                (-2. + 3. * reduced_mass_over_total_mass)) /
+           sqrt(qdotq * qdotq * qdotq * qdotq * qdotq * qdotq * qdotq * qdotq *
+                qdotq) -
+       8. * qdotp * reduced_mass_over_total_mass *
            (3. * pdotp * x[0] * qdotp * qdotq *
                 (17. + 30. * reduced_mass_over_total_mass) -
             3. * x[3] * pdotp * qdotq * qdotq *
@@ -2739,28 +2743,31 @@ void BinaryWithGravitationalWaves::hamiltonian_system(
             8. * x[0] * qdotp * qdotp * qdotp *
                 (5. + 43. * reduced_mass_over_total_mass) -
             8. * x[3] * qdotp * qdotp * qdotq *
-                (5. + 43. * reduced_mass_over_total_mass)) -
-       2. * x[0] * std::sqrt(qdotq) *
+                (5. + 43. * reduced_mass_over_total_mass)) /
+           (qdotq * qdotq * qdotq * qdotq) -
+       8. * x[0] *
            (3. * pdotp * qdotp * qdotp * qdotq * reduced_mass_over_total_mass *
                 (17. + 30. * reduced_mass_over_total_mass) +
             4. * qdotp * qdotp * qdotp * qdotp * reduced_mass_over_total_mass *
                 (5. + 43. * reduced_mass_over_total_mass) +
             3. * pdotp * pdotp * qdotq * qdotq *
                 (-27. + reduced_mass_over_total_mass *
-                            (136. + 109. * reduced_mass_over_total_mass))) +
-       0.75 * x[0] * qdotq *
+                            (136. + 109. * reduced_mass_over_total_mass))) /
+           (qdotq * qdotq * qdotq * qdotq) +
+       3. * x[0] *
            (3. * qdotp * qdotp * reduced_mass_over_total_mass *
                 (340. + 3. * M_PI * M_PI +
                  112. * reduced_mass_over_total_mass) +
             pdotp * qdotq *
                 (600. + reduced_mass_over_total_mass *
                             (1340. - 3. * M_PI * M_PI +
-                             552. * reduced_mass_over_total_mass))) -
-       3. * x[0] *
+                             552. * reduced_mass_over_total_mass))) /
+           sqrt(qdotq * qdotq * qdotq * qdotq * qdotq * qdotq * qdotq) -
+       12. * x[0] *
            (pdotp * pdotp * qdotp * qdotp * qdotq * qdotq *
                 (2. - 3. * reduced_mass_over_total_mass) *
                 reduced_mass_over_total_mass * reduced_mass_over_total_mass -
-            3. * pdotp * qdotp * qdotp * qdotp * qdotp * qdotq *
+            3. * pdotp * qdotp * qdotq * qdotp * qdotp * qdotq *
                 (-1. + reduced_mass_over_total_mass) *
                 reduced_mass_over_total_mass * reduced_mass_over_total_mass -
             5. * qdotp * qdotp * qdotp * qdotp * qdotp * qdotp *
@@ -2770,9 +2777,9 @@ void BinaryWithGravitationalWaves::hamiltonian_system(
                 (7. +
                  reduced_mass_over_total_mass *
                      (-42. + reduced_mass_over_total_mass *
-                                 (53. + 5. * reduced_mass_over_total_mass))))) /
-      (48. * std::sqrt(qdotq * qdotq * qdotq * qdotq * qdotq * qdotq * qdotq *
-                       qdotq * qdotq));
+                                 (53. + 5. * reduced_mass_over_total_mass)))) /
+           sqrt(qdotq * qdotq * qdotq * qdotq * qdotq * qdotq * qdotq * qdotq *
+                qdotq));
 
   double dH_dq1_Newt = x[1] / std::sqrt(qdotq * qdotq * qdotq);
   double dH_dq1_1 =
@@ -2802,14 +2809,16 @@ void BinaryWithGravitationalWaves::hamiltonian_system(
                       (20. + 3. * reduced_mass_over_total_mass))) /
       (8. * std::sqrt(qdotq * qdotq * qdotq * qdotq * qdotq * qdotq * qdotq));
   double dH_dq1_3 =
-      (3. / 2. * qdotp * qdotq *
-           (x[1] * (x[0] * x[3] + x[2] * x[5]) -
-            x[4] * (x[0] * x[0] + x[2] * x[2])) *
-           reduced_mass_over_total_mass *
-           (340. + 3. * M_PI * M_PI + 112. * reduced_mass_over_total_mass) +
-       2. * x[1] * std::sqrt(qdotq * qdotq * qdotq) *
-           (-12 + (-872. + 63. * M_PI * M_PI) * reduced_mass_over_total_mass) -
-       6. * qdotp * reduced_mass_over_total_mass *
+      1. / 192. *
+      (6. *
+           (qdotp * (x[1] * qdotp - x[4] * qdotq) *
+            reduced_mass_over_total_mass *
+            (340. + 3. * M_PI * M_PI + 112. * reduced_mass_over_total_mass)) /
+           sqrt(qdotq * qdotq * qdotq * qdotq * qdotq * qdotq * qdotq) +
+       8. * x[1] *
+           (-12. + (-872. + 63. * M_PI * M_PI) * reduced_mass_over_total_mass) /
+           (qdotq * qdotq * qdotq) -
+       24. * qdotp * reduced_mass_over_total_mass *
            reduced_mass_over_total_mass *
            (pdotp * pdotp * x[1] * qdotp * qdotq * qdotq *
                 (2. - 3. * reduced_mass_over_total_mass) -
@@ -2822,8 +2831,10 @@ void BinaryWithGravitationalWaves::hamiltonian_system(
             15. * x[4] * qdotp * qdotp * qdotp * qdotp * qdotq *
                 reduced_mass_over_total_mass +
             x[4] * pdotp * pdotp * qdotq * qdotq * qdotq *
-                (-2. + 3. * reduced_mass_over_total_mass)) -
-       2. * qdotp * std::sqrt(qdotq) * reduced_mass_over_total_mass *
+                (-2. + 3. * reduced_mass_over_total_mass)) /
+           sqrt(qdotq * qdotq * qdotq * qdotq * qdotq * qdotq * qdotq * qdotq *
+                qdotq) -
+       8. * qdotp * reduced_mass_over_total_mass *
            (3. * pdotp * x[1] * qdotp * qdotq *
                 (17. + 30. * reduced_mass_over_total_mass) -
             3. * x[4] * pdotp * qdotq * qdotq *
@@ -2831,28 +2842,31 @@ void BinaryWithGravitationalWaves::hamiltonian_system(
             8. * x[1] * qdotp * qdotp * qdotp *
                 (5. + 43. * reduced_mass_over_total_mass) -
             8. * x[4] * qdotp * qdotp * qdotq *
-                (5. + 43. * reduced_mass_over_total_mass)) -
-       2. * x[1] * std::sqrt(qdotq) *
+                (5. + 43. * reduced_mass_over_total_mass)) /
+           (qdotq * qdotq * qdotq * qdotq) -
+       8. * x[1] *
            (3. * pdotp * qdotp * qdotp * qdotq * reduced_mass_over_total_mass *
                 (17. + 30. * reduced_mass_over_total_mass) +
             4. * qdotp * qdotp * qdotp * qdotp * reduced_mass_over_total_mass *
                 (5. + 43. * reduced_mass_over_total_mass) +
             3. * pdotp * pdotp * qdotq * qdotq *
                 (-27. + reduced_mass_over_total_mass *
-                            (136. + 109. * reduced_mass_over_total_mass))) +
-       0.75 * x[1] * qdotq *
+                            (136. + 109. * reduced_mass_over_total_mass))) /
+           (qdotq * qdotq * qdotq * qdotq) +
+       3. * x[1] *
            (3. * qdotp * qdotp * reduced_mass_over_total_mass *
                 (340. + 3. * M_PI * M_PI +
                  112. * reduced_mass_over_total_mass) +
             pdotp * qdotq *
                 (600. + reduced_mass_over_total_mass *
                             (1340. - 3. * M_PI * M_PI +
-                             552. * reduced_mass_over_total_mass))) -
-       3. * x[1] *
+                             552. * reduced_mass_over_total_mass))) /
+           sqrt(qdotq * qdotq * qdotq * qdotq * qdotq * qdotq * qdotq) -
+       12. * x[1] *
            (pdotp * pdotp * qdotp * qdotp * qdotq * qdotq *
                 (2. - 3. * reduced_mass_over_total_mass) *
                 reduced_mass_over_total_mass * reduced_mass_over_total_mass -
-            3. * pdotp * qdotp * qdotp * qdotp * qdotp * qdotq *
+            3. * pdotp * qdotp * qdotq * qdotp * qdotp * qdotq *
                 (-1. + reduced_mass_over_total_mass) *
                 reduced_mass_over_total_mass * reduced_mass_over_total_mass -
             5. * qdotp * qdotp * qdotp * qdotp * qdotp * qdotp *
@@ -2862,9 +2876,9 @@ void BinaryWithGravitationalWaves::hamiltonian_system(
                 (7. +
                  reduced_mass_over_total_mass *
                      (-42. + reduced_mass_over_total_mass *
-                                 (53. + 5. * reduced_mass_over_total_mass))))) /
-      (48. * std::sqrt(qdotq * qdotq * qdotq * qdotq * qdotq * qdotq * qdotq *
-                       qdotq * qdotq));
+                                 (53. + 5. * reduced_mass_over_total_mass)))) /
+           sqrt(qdotq * qdotq * qdotq * qdotq * qdotq * qdotq * qdotq * qdotq *
+                qdotq));
 
   double dH_dq2_Newt = x[2] / std::sqrt(qdotq * qdotq * qdotq);
   double dH_dq2_1 =
@@ -2894,14 +2908,16 @@ void BinaryWithGravitationalWaves::hamiltonian_system(
                       (20. + 3. * reduced_mass_over_total_mass))) /
       (8. * std::sqrt(qdotq * qdotq * qdotq * qdotq * qdotq * qdotq * qdotq));
   double dH_dq2_3 =
-      (3. / 2. * qdotp * qdotq *
-           (x[2] * (x[0] * x[3] + x[1] * x[3]) -
-            x[5] * (x[0] * x[0] + x[1] * x[1])) *
-           reduced_mass_over_total_mass *
-           (340. + 3. * M_PI * M_PI + 112. * reduced_mass_over_total_mass) +
-       2. * x[2] * std::sqrt(qdotq * qdotq * qdotq) *
-           (-12. + (-872. + 63. * M_PI * M_PI) * reduced_mass_over_total_mass) -
-       6. * qdotp * reduced_mass_over_total_mass *
+      1. / 192. *
+      (6. *
+           (qdotp * (x[2] * qdotp - x[5] * qdotq) *
+            reduced_mass_over_total_mass *
+            (340. + 3. * M_PI * M_PI + 112. * reduced_mass_over_total_mass)) /
+           sqrt(qdotq * qdotq * qdotq * qdotq * qdotq * qdotq * qdotq) +
+       8. * x[2] *
+           (-12. + (-872. + 63. * M_PI * M_PI) * reduced_mass_over_total_mass) /
+           (qdotq * qdotq * qdotq) -
+       24. * qdotp * reduced_mass_over_total_mass *
            reduced_mass_over_total_mass *
            (pdotp * pdotp * x[2] * qdotp * qdotq * qdotq *
                 (2. - 3. * reduced_mass_over_total_mass) -
@@ -2914,8 +2930,10 @@ void BinaryWithGravitationalWaves::hamiltonian_system(
             15. * x[5] * qdotp * qdotp * qdotp * qdotp * qdotq *
                 reduced_mass_over_total_mass +
             x[5] * pdotp * pdotp * qdotq * qdotq * qdotq *
-                (-2. + 3. * reduced_mass_over_total_mass)) -
-       2. * qdotp * std::sqrt(qdotq) * reduced_mass_over_total_mass *
+                (-2. + 3. * reduced_mass_over_total_mass)) /
+           sqrt(qdotq * qdotq * qdotq * qdotq * qdotq * qdotq * qdotq * qdotq *
+                qdotq) -
+       8. * qdotp * reduced_mass_over_total_mass *
            (3. * pdotp * x[2] * qdotp * qdotq *
                 (17. + 30. * reduced_mass_over_total_mass) -
             3. * x[5] * pdotp * qdotq * qdotq *
@@ -2923,28 +2941,31 @@ void BinaryWithGravitationalWaves::hamiltonian_system(
             8. * x[2] * qdotp * qdotp * qdotp *
                 (5. + 43. * reduced_mass_over_total_mass) -
             8. * x[5] * qdotp * qdotp * qdotq *
-                (5. + 43. * reduced_mass_over_total_mass)) -
-       2. * x[2] * std::sqrt(qdotq) *
+                (5. + 43. * reduced_mass_over_total_mass)) /
+           (qdotq * qdotq * qdotq * qdotq) -
+       8. * x[2] *
            (3. * pdotp * qdotp * qdotp * qdotq * reduced_mass_over_total_mass *
                 (17. + 30. * reduced_mass_over_total_mass) +
             4. * qdotp * qdotp * qdotp * qdotp * reduced_mass_over_total_mass *
                 (5. + 43. * reduced_mass_over_total_mass) +
             3. * pdotp * pdotp * qdotq * qdotq *
                 (-27. + reduced_mass_over_total_mass *
-                            (136. + 109. * reduced_mass_over_total_mass))) +
-       0.75 * x[2] * qdotq *
+                            (136. + 109. * reduced_mass_over_total_mass))) /
+           (qdotq * qdotq * qdotq * qdotq) +
+       3. * x[2] *
            (3. * qdotp * qdotp * reduced_mass_over_total_mass *
                 (340. + 3. * M_PI * M_PI +
                  112. * reduced_mass_over_total_mass) +
             pdotp * qdotq *
                 (600. + reduced_mass_over_total_mass *
                             (1340. - 3. * M_PI * M_PI +
-                             552. * reduced_mass_over_total_mass))) -
-       3. * x[2] *
+                             552. * reduced_mass_over_total_mass))) /
+           sqrt(qdotq * qdotq * qdotq * qdotq * qdotq * qdotq * qdotq) -
+       12. * x[2] *
            (pdotp * pdotp * qdotp * qdotp * qdotq * qdotq *
                 (2. - 3. * reduced_mass_over_total_mass) *
                 reduced_mass_over_total_mass * reduced_mass_over_total_mass -
-            3. * pdotp * qdotp * qdotp * qdotp * qdotp * qdotq *
+            3. * pdotp * qdotp * qdotq * qdotp * qdotp * qdotq *
                 (-1. + reduced_mass_over_total_mass) *
                 reduced_mass_over_total_mass * reduced_mass_over_total_mass -
             5. * qdotp * qdotp * qdotp * qdotp * qdotp * qdotp *
@@ -2954,15 +2975,15 @@ void BinaryWithGravitationalWaves::hamiltonian_system(
                 (7. +
                  reduced_mass_over_total_mass *
                      (-42. + reduced_mass_over_total_mass *
-                                 (53. + 5. * reduced_mass_over_total_mass))))) /
-      (48. * std::sqrt(qdotq * qdotq * qdotq * qdotq * qdotq * qdotq * qdotq *
-                       qdotq * qdotq));
+                                 (53. + 5. * reduced_mass_over_total_mass)))) /
+           sqrt(qdotq * qdotq * qdotq * qdotq * qdotq * qdotq * qdotq * qdotq *
+                qdotq));
 
   double L = total_mass * reduced_mass *
              sqrt((x[1] * x[5] - x[2] * x[4]) * (x[1] * x[5] - x[2] * x[4]) +
                   (x[2] * x[3] - x[0] * x[5]) * (x[2] * x[3] - x[0] * x[5]) +
                   (x[0] * x[4] - x[1] * x[3]) * (x[0] * x[4] - x[1] * x[3]));
-  double w = L / (square(total_mass) * qdotq);
+  double w = L / (square(total_mass) * reduced_mass * qdotq);
   double vw = std::cbrt(total_mass * w);
   double gamma_Euler = 0.57721566490153286060651209008240243104215933593992;
 
@@ -2996,9 +3017,9 @@ void BinaryWithGravitationalWaves::hamiltonian_system(
        fl6 * vw * vw * vw * vw * vw * vw * std::log(4. * vw) +
        f7 * vw * vw * vw * vw * vw * vw * vw);
 
-  std::array<double, 3> F{1. / (w * L) * dE_dt * x[3],
-                          1. / (w * L) * dE_dt * x[4],
-                          1. / (w * L) * dE_dt * x[5]};
+  std::array<double, 3> F{1. / (w * L) * dE_dt * reduced_mass * x[3],
+                          1. / (w * L) * dE_dt * reduced_mass * x[4],
+                          1. / (w * L) * dE_dt * reduced_mass * x[5]};
 
   dpdt[0] = (1. / total_mass) *
             (dH_dp0_Newt + dH_dp0_1 + dH_dp0_2 + dH_dp0_3);  // dX0/dt = dH/dP0
