@@ -28,3 +28,5 @@ target_link_libraries(
   ErrorHandling
   Utilities
   )
+
+add_subdirectory(BoundaryConditions)

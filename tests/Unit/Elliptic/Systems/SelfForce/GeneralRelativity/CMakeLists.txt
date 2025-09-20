@@ -16,3 +16,5 @@ target_link_libraries(
   DataStructuresHelpers
   GrSelfForce
   )
+
+add_subdirectory(BoundaryConditions)
