@@ -1932,9 +1932,9 @@ BinaryWithGravitationalWavesVariables<DataType>::get_t_boosted_distance_left(
     boost_velocity.get(i) = -momentum_left_t.get(i) / mass_left;
   }
   */
-  boost_velocity.get(0) = boost_momentum[0] / mass_left;
-  boost_velocity.get(1) = boost_momentum[1] / mass_left;
-  boost_velocity.get(2) = boost_momentum[2] / mass_left;
+  boost_velocity.get(0) = -boost_momentum[0] / mass_left;
+  boost_velocity.get(1) = -boost_momentum[1] / mass_left;
+  boost_velocity.get(2) = -boost_momentum[2] / mass_left;
   const DataType velocity_squared{
       get(dot_product(boost_velocity, boost_velocity))};
   const DataType lorentz_factor{1.0 / sqrt(1.0 - velocity_squared)};
@@ -1985,9 +1985,9 @@ BinaryWithGravitationalWavesVariables<DataType>::get_t_boosted_distance_right(
     boost_velocity.get(i) = -momentum_right_t.get(i) / mass_right;
   }
   */
-  boost_velocity.get(0) = -boost_momentum[0] / mass_right;
-  boost_velocity.get(1) = -boost_momentum[1] / mass_right;
-  boost_velocity.get(2) = -boost_momentum[2] / mass_right;
+  boost_velocity.get(0) = boost_momentum[0] / mass_right;
+  boost_velocity.get(1) = boost_momentum[1] / mass_right;
+  boost_velocity.get(2) = boost_momentum[2] / mass_right;
   const DataType velocity_squared{
       get(dot_product(boost_velocity, boost_velocity))};
   const DataType lorentz_factor{1.0 / sqrt(1.0 - velocity_squared)};
@@ -2038,9 +2038,9 @@ BinaryWithGravitationalWavesVariables<DataType>::get_t_boosted_normal_left(
     boost_velocity.get(i) = -momentum_left_t.get(i) / mass_left;
   }
   */
-  boost_velocity.get(0) = boost_momentum[0] / mass_left;
-  boost_velocity.get(1) = boost_momentum[1] / mass_left;
-  boost_velocity.get(2) = boost_momentum[2] / mass_left;
+  boost_velocity.get(0) = -boost_momentum[0] / mass_left;
+  boost_velocity.get(1) = -boost_momentum[1] / mass_left;
+  boost_velocity.get(2) = -boost_momentum[2] / mass_left;
   const DataType velocity_squared{
       get(dot_product(boost_velocity, boost_velocity))};
   const DataType lorentz_factor{1.0 / sqrt(1.0 - velocity_squared)};
@@ -2093,9 +2093,9 @@ BinaryWithGravitationalWavesVariables<DataType>::get_t_boosted_normal_right(
     boost_velocity.get(i) = -momentum_right_t.get(i) / mass_right;
   }
   */
-  boost_velocity.get(0) = -boost_momentum[0] / mass_right;
-  boost_velocity.get(1) = -boost_momentum[1] / mass_right;
-  boost_velocity.get(2) = -boost_momentum[2] / mass_right;
+  boost_velocity.get(0) = boost_momentum[0] / mass_right;
+  boost_velocity.get(1) = boost_momentum[1] / mass_right;
+  boost_velocity.get(2) = boost_momentum[2] / mass_right;
   const DataType velocity_squared{
       get(dot_product(boost_velocity, boost_velocity))};
   const DataType lorentz_factor{1.0 / sqrt(1.0 - velocity_squared)};
@@ -2174,26 +2174,29 @@ tnsr::aa<DataType, 3> BinaryWithGravitationalWavesVariables<
   // Schwarzschild Harmonic Coordinates lapse
   Scalar<DataType> lapse{t.size()};
   Scalar<DataType> gamma_rr{t.size()};
-  get(gamma_rr) = 1. + 2. * mass_left / (mass_left + get(distance_left_t)) +
-                  square(2. * mass_left / (mass_left + get(distance_left_t))) +
-                  cube(2. * mass_left / (mass_left + get(distance_left_t)));
+  get(gamma_rr) =
+      1. + 2. * mass_left_in / (mass_left_in + get(distance_left_t)) +
+      square(2. * mass_left_in / (mass_left_in + get(distance_left_t))) +
+      cube(2. * mass_left_in / (mass_left_in + get(distance_left_t)));
   get(lapse) = 1. / sqrt(get(gamma_rr));
 
   // Schwarzschild Harmonic Coordinates shift
   tnsr::I<DataType, 3> shift{t.size()};
   for (size_t i = 0; i < 3; ++i) {
-    shift.get(i) = square(2. * mass_left / (mass_left + get(distance_left_t))) *
-                   normal_left_t.get(i) / get(gamma_rr);
+    shift.get(i) =
+        square(2. * mass_left_in / (mass_left_in + get(distance_left_t))) *
+        normal_left_t.get(i) / get(gamma_rr);
   }
   // Schwarzschild Harmonic Coordinates spatial metric
   tnsr::ii<DataType, 3> spatial_metric{t.size()};
   for (size_t i = 0; i < 3; ++i) {
     for (size_t j = 0; j < 3; ++j) {
       spatial_metric.get(i, j) =
-          (get(gamma_rr) - square(1. + mass_left / get(distance_left_t))) *
+          (get(gamma_rr) - square(1. + mass_left_in / get(distance_left_t))) *
           normal_left_t.get(i) * normal_left_t.get(j);
     }
-    spatial_metric.get(i, i) += square(1. + mass_left / get(distance_left_t));
+    spatial_metric.get(i, i) +=
+        square(1. + mass_left_in / get(distance_left_t));
   }
 
   tnsr::aa<DataType, 3> spacetime_metric{t.size()};
@@ -2206,9 +2209,9 @@ tnsr::aa<DataType, 3> BinaryWithGravitationalWavesVariables<
     boost_velocity.get(i) = -momentum_left_t.get(i) / mass_left;
   }
   */
-  boost_velocity.get(0) = boost_momentum[0] / mass_left;
-  boost_velocity.get(1) = boost_momentum[1] / mass_left;
-  boost_velocity.get(2) = boost_momentum[2] / mass_left;
+  boost_velocity.get(0) = -boost_momentum[0] / mass_left;
+  boost_velocity.get(1) = -boost_momentum[1] / mass_left;
+  boost_velocity.get(2) = -boost_momentum[2] / mass_left;
   const DataType velocity_squared{
       get(dot_product(boost_velocity, boost_velocity))};
   const DataType lorentz_factor{1.0 / sqrt(1.0 - velocity_squared)};
@@ -2292,16 +2295,16 @@ tnsr::aa<DataType, 3> BinaryWithGravitationalWavesVariables<
   Scalar<DataType> lapse{t.size()};
   Scalar<DataType> gamma_rr{t.size()};
   get(gamma_rr) =
-      1. + 2. * mass_right / (mass_right + get(distance_right_t)) +
-      square(2. * mass_right / (mass_right + get(distance_right_t))) +
-      cube(2. * mass_right / (mass_right + get(distance_right_t)));
+      1. + 2. * mass_right_in / (mass_right_in + get(distance_right_t)) +
+      square(2. * mass_right_in / (mass_right_in + get(distance_right_t))) +
+      cube(2. * mass_right_in / (mass_right_in + get(distance_right_t)));
   get(lapse) = 1. / sqrt(get(gamma_rr));
 
   // Schwarzschild Harmonic Coordinates shift
   tnsr::I<DataType, 3> shift{t.size()};
   for (size_t i = 0; i < 3; ++i) {
     shift.get(i) =
-        square(2. * mass_right / (mass_right + get(distance_right_t))) *
+        square(2. * mass_right_in / (mass_right_in + get(distance_right_t))) *
         normal_right_t.get(i) / get(gamma_rr);
   }
 
@@ -2310,10 +2313,11 @@ tnsr::aa<DataType, 3> BinaryWithGravitationalWavesVariables<
   for (size_t i = 0; i < 3; ++i) {
     for (size_t j = 0; j < 3; ++j) {
       spatial_metric.get(i, j) =
-          (get(gamma_rr) - square(1. + mass_right / get(distance_right_t))) *
+          (get(gamma_rr) - square(1. + mass_right_in / get(distance_right_t))) *
           normal_right_t.get(i) * normal_right_t.get(j);
     }
-    spatial_metric.get(i, i) += square(1. + mass_right / get(distance_right_t));
+    spatial_metric.get(i, i) +=
+        square(1. + mass_right_in / get(distance_right_t));
   }
 
   tnsr::aa<DataType, 3> spacetime_metric{t.size()};
@@ -2326,9 +2330,9 @@ tnsr::aa<DataType, 3> BinaryWithGravitationalWavesVariables<
     boost_velocity.get(i) = -momentum_right_t.get(i) / mass_right;
   }
   */
-  boost_velocity.get(0) = -boost_momentum[0] / mass_right;
-  boost_velocity.get(1) = -boost_momentum[1] / mass_right;
-  boost_velocity.get(2) = -boost_momentum[2] / mass_right;
+  boost_velocity.get(0) = boost_momentum[0] / mass_right;
+  boost_velocity.get(1) = boost_momentum[1] / mass_right;
+  boost_velocity.get(2) = boost_momentum[2] / mass_right;
   const DataType velocity_squared{
       get(dot_product(boost_velocity, boost_velocity))};
   const DataType lorentz_factor{1.0 / sqrt(1.0 - velocity_squared)};

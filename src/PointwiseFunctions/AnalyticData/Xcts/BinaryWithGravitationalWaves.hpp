@@ -178,7 +178,8 @@ struct BinaryWithGravitationalWavesVariables
           DataType, Dim, Frame::ElementLogical, Frame::Inertial>>>
           local_inv_jacobian,
       const tnsr::I<DataType, 3>& local_x, const double local_mass_left,
-      const double local_mass_right,
+      const double local_mass_right, const double local_mass_left_in,
+      const double local_mass_right_in,
       const std::array<double, 3> local_boost_momentum,
       const std::array<double, 3> local_pn_momentum,
       const double local_attenuation_parameter,
@@ -198,6 +199,8 @@ struct BinaryWithGravitationalWavesVariables
         x(local_x),
         mass_left(local_mass_left),
         mass_right(local_mass_right),
+        mass_left_in(local_mass_left_in),
+        mass_right_in(local_mass_right_in),
         boost_momentum(local_boost_momentum),
         pn_momentum(local_pn_momentum),
         attenuation_parameter(local_attenuation_parameter),
@@ -222,6 +225,8 @@ struct BinaryWithGravitationalWavesVariables
   const tnsr::I<DataType, 3>& x;
   const double mass_left;
   const double mass_right;
+  const double mass_left_in;
+  const double mass_right_in;
   const std::array<double, 3> boost_momentum;
   const std::array<double, 3> pn_momentum;
   const double attenuation_parameter;
@@ -610,11 +615,23 @@ class BinaryWithGravitationalWaves
       public elliptic::analytic_data::InitialGuess {
  public:
   struct MassLeft {
-    static constexpr Options::String help = "The mass of the left black hole.";
+    static constexpr Options::String help =
+        "The mass of the left black hole for the Post-Newtonian data.";
     using type = double;
   };
   struct MassRight {
-    static constexpr Options::String help = "The mass of the right black hole.";
+    static constexpr Options::String help =
+        "The mass of the right black hole for the Post-Newtonian data.";
+    using type = double;
+  };
+  struct MassLeftIN {
+    static constexpr Options::String help =
+        "The mass of the left black hole for the superposed data.";
+    using type = double;
+  };
+  struct MassRightIN {
+    static constexpr Options::String help =
+        "The mass of the right black hole for the superposed data.";
     using type = double;
   };
   struct XCoordsLeft {
@@ -660,9 +677,9 @@ class BinaryWithGravitationalWaves
     using type = bool;
   };
   using options =
-      tmpl::list<MassLeft, MassRight, XCoordsLeft, XCoordsRight, BoostMomentum,
-                 PNMomentum, AttenuationParameter, AttenuationRadius,
-                 OuterRadius, WriteEvolutionOption>;
+      tmpl::list<MassLeft, MassRight, MassLeftIN, MassRightIN, XCoordsLeft,
+                 XCoordsRight, BoostMomentum, PNMomentum, AttenuationParameter,
+                 AttenuationRadius, OuterRadius, WriteEvolutionOption>;
   static constexpr Options::String help =
       "Binary black hole initial data with realistic wave background, "
       "constructed in Post-Newtonian approximations. ";
@@ -677,6 +694,7 @@ class BinaryWithGravitationalWaves
   ~BinaryWithGravitationalWaves() override = default;
 
   BinaryWithGravitationalWaves(double mass_left, double mass_right,
+                               double mass_left_in, double mass_right_in,
                                double xcoord_left, double xcoord_right,
                                std::array<double, 3> boost_momentum,
                                std::array<double, 3> pn_momentum,
@@ -686,6 +704,8 @@ class BinaryWithGravitationalWaves
                                const Options::Context& context = {})
       : mass_left_(mass_left),
         mass_right_(mass_right),
+        mass_left_in_(mass_left_in),
+        mass_right_in_(mass_right_in),
         xcoord_left_(xcoord_left),
         xcoord_right_(xcoord_right),
         boost_momentum_(boost_momentum),
@@ -696,6 +716,10 @@ class BinaryWithGravitationalWaves
         write_evolution_option_(write_evolution_option) {
     if (mass_left_ <= 0. or mass_right_ <= 0.) {
       PARSE_ERROR(context, "'MassLeft' and 'MassRight' need to be positive.");
+    }
+    if (mass_left_in_ <= 0. or mass_right_in_ <= 0.) {
+      PARSE_ERROR(context,
+                  "'MassLeftIN' and 'MassRightIN' need to be positive.");
     }
     if (xcoord_left_ >= xcoord_right_) {
       PARSE_ERROR(context,
@@ -752,6 +776,8 @@ class BinaryWithGravitationalWaves
     elliptic::analytic_data::InitialGuess::pup(p);
     p | mass_left_;
     p | mass_right_;
+    p | mass_left_in_;
+    p | mass_right_in_;
     p | xcoord_left_;
     p | xcoord_right_;
     p | boost_momentum_;
@@ -789,6 +815,8 @@ class BinaryWithGravitationalWaves
 
   double mass_left() const { return mass_left_; }
   double mass_right() const { return mass_right_; }
+  double mass_left_in() const { return mass_left_in_; }
+  double mass_right_in() const { return mass_right_in_; }
   double xcoord_left() const { return xcoord_left_; }
   double xcoord_right() const { return xcoord_right_; }
   double attenuation_parameter() const { return attenuation_parameter_; }
@@ -799,6 +827,8 @@ class BinaryWithGravitationalWaves
  private:
   double mass_left_ = std::numeric_limits<double>::signaling_NaN();
   double mass_right_ = std::numeric_limits<double>::signaling_NaN();
+  double mass_left_in_ = std::numeric_limits<double>::signaling_NaN();
+  double mass_right_in_ = std::numeric_limits<double>::signaling_NaN();
   double xcoord_left_ = std::numeric_limits<double>::signaling_NaN();
   double xcoord_right_ = std::numeric_limits<double>::signaling_NaN();
   std::array<double, 3> boost_momentum_ = {
@@ -832,6 +862,8 @@ class BinaryWithGravitationalWaves
                                 x,
                                 mass_left_,
                                 mass_right_,
+                                mass_left_in_,
+                                mass_right_in_,
                                 boost_momentum_,
                                 pn_momentum_,
                                 attenuation_parameter_,
