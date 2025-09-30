@@ -9,6 +9,7 @@ spectre_target_sources(
   ${LIBRARY}
   PRIVATE
   Binary.cpp
+  BinaryWithGravitationalWaves.cpp
   )
 
 spectre_target_headers(
@@ -17,6 +18,7 @@ spectre_target_headers(
   HEADERS
   AnalyticData.hpp
   Binary.hpp
+  BinaryWithGravitationalWaves.hpp
   CommonVariables.hpp
   CommonVariables.tpp
   )
@@ -28,6 +30,7 @@ target_link_libraries(
   ErrorHandling
   GeneralRelativity
   Hydro
+  Integration
   LinearOperators
   Options
   Parallel

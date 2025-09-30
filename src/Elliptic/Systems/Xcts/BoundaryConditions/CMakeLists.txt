@@ -10,6 +10,7 @@ spectre_target_sources(
   PRIVATE
   ApparentHorizon.cpp
   Flatness.cpp
+  InnerForBwGW.cpp
   Robin.cpp
   )
 
@@ -20,6 +21,7 @@ spectre_target_headers(
   ApparentHorizon.hpp
   Factory.hpp
   Flatness.hpp
+  InnerForBwGW.hpp
   Robin.hpp
   )
 
@@ -30,6 +32,7 @@ target_link_libraries(
   Domain
   Elliptic
   ErrorHandling
+  XctsAnalyticData
   XctsSolutions
   Options
   Serialization
