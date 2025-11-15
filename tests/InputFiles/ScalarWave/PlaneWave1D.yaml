@@ -5,6 +5,8 @@ Executable: EvolveScalarWave1D
 Testing:
   Check: parse;execute
   Priority: High
+ExpectedOutput:
+  - ScalarWavePlaneWave1DReductions.h5
 
 ---
 
@@ -54,6 +56,13 @@ PhaseChangeAndTriggers:
       - VisitAndReturn(EvaluateAmrCriteria)
       - VisitAndReturn(AdjustDomain)
       - VisitAndReturn(CheckDomain)
+  - Trigger:
+      Slabs:
+        EvenlySpaced:
+          Interval: 3
+          Offset: 0
+    PhaseChanges:
+      - VisitAndReturn(WriteCheckpoint)
 
 Evolution:
   InitialTime: 0.0
@@ -89,8 +98,8 @@ SpatialDiscretization:
 # If filtering is enabled in the executable the filter can be controlled using:
 # Filtering:
 #   ExpFilter0:
-#     Alpha: 12
-#     HalfPower: 32
+#     Alpha: 36
+#     HalfPower: 128
 #     Enable: false
 #     BlocksToFilter: All
 
@@ -102,12 +111,26 @@ EventsAndTriggersAtSlabs:
           Offset: 0
     Events:
       - RefineMesh
+      - ObserveAmrStats:
+          PrintToTerminal: True
+          ObservePerCore: False
   - Trigger:
       Slabs:
         Specified:
           Values: [5]
     Events:
       - Completion
+
+EventsAndTriggersAtCheckpoints:
+  - Trigger: Always
+    Events:
+      - ObserveFields:
+          SubfileName: CheckpointVolumeData
+          VariablesToObserve: ["Psi", "Pi", "Phi"]
+          InterpolateToMesh: None
+          CoordinatesFloatingPointType: Double
+          FloatingPointTypes: [Double]
+          BlocksToObserve: All
 
 EventsAndDenseTriggers:
 

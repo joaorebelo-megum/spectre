@@ -15,6 +15,7 @@
 #include "Domain/Tags.hpp"
 #include "Evolution/Actions/RunEventsAndDenseTriggers.hpp"
 #include "Evolution/Actions/RunEventsAndTriggers.hpp"
+#include "Evolution/BoundaryCorrection.hpp"
 #include "Evolution/ComputeTags.hpp"
 #include "Evolution/DiscontinuousGalerkin/Actions/ApplyBoundaryCorrections.hpp"
 #include "Evolution/DiscontinuousGalerkin/Actions/ComputeTimeDerivative.hpp"
@@ -75,11 +76,10 @@
 #include "PointwiseFunctions/InitialDataUtilities/InitialData.hpp"
 #include "Time/Actions/AdvanceTime.hpp"
 #include "Time/Actions/CleanHistory.hpp"
-#include "Time/Actions/RecordTimeStepperData.hpp"
 #include "Time/Actions/SelfStartActions.hpp"
-#include "Time/Actions/UpdateU.hpp"
 #include "Time/ChangeSlabSize/Action.hpp"
 #include "Time/ChangeTimeStepperOrder.hpp"
+#include "Time/RecordTimeStepperData.hpp"
 #include "Time/StepChoosers/Factory.hpp"
 #include "Time/StepChoosers/StepChooser.hpp"
 #include "Time/Tags/Time.hpp"
@@ -89,6 +89,7 @@
 #include "Time/TimeSteppers/LtsTimeStepper.hpp"
 #include "Time/TimeSteppers/TimeStepper.hpp"
 #include "Time/Triggers/TimeTriggers.hpp"
+#include "Time/UpdateU.hpp"
 #include "Utilities/ProtocolHelpers.hpp"
 #include "Utilities/TMPL.hpp"
 
@@ -156,6 +157,9 @@ struct EvolutionMetavars {
                        dg::Events::field_observations<
                            volume_dim, observe_fields, non_tensor_compute_tags>,
                        Events::time_events<system>>>>,
+        tmpl::pair<
+            evolution::BoundaryCorrection,
+            ForceFree::BoundaryCorrections::standard_boundary_corrections>,
         tmpl::pair<evolution::initial_data::InitialData, initial_data_list>,
         tmpl::pair<LtsTimeStepper, TimeSteppers::lts_time_steppers>,
         tmpl::pair<PhaseChange,
@@ -188,18 +192,20 @@ struct EvolutionMetavars {
           use_dg_element_collection>,
       tmpl::conditional_t<
           local_time_stepping,
-          tmpl::list<evolution::Actions::RunEventsAndDenseTriggers<
+          tmpl::list<Actions::MutateApply<RecordTimeStepperData<system>>,
+                     evolution::Actions::RunEventsAndDenseTriggers<
                          tmpl::list<evolution::dg::ApplyBoundaryCorrections<
                              local_time_stepping, system, volume_dim, true>>>,
+                     Actions::MutateApply<UpdateU<system, local_time_stepping>>,
                      evolution::dg::Actions::ApplyLtsBoundaryCorrections<
-                         system, volume_dim, false, use_dg_element_collection>,
+                         volume_dim, false, use_dg_element_collection>,
                      Actions::MutateApply<ChangeTimeStepperOrder<system>>>,
           tmpl::list<
               evolution::dg::Actions::ApplyBoundaryCorrectionsToTimeDerivative<
-                  system, volume_dim, false, use_dg_element_collection>,
-              Actions::RecordTimeStepperData<system>,
+                  volume_dim, false, use_dg_element_collection>,
+              Actions::MutateApply<RecordTimeStepperData<system>>,
               evolution::Actions::RunEventsAndDenseTriggers<tmpl::list<>>,
-              Actions::UpdateU<system>>>,
+              Actions::MutateApply<UpdateU<system, local_time_stepping>>>>,
       Actions::CleanHistory<system, local_time_stepping>,
       Limiters::Actions::SendData<EvolutionMetavars>,
       Limiters::Actions::Limit<EvolutionMetavars>,
@@ -260,16 +266,27 @@ struct EvolutionMetavars {
                                             Parallel::Actions::TerminatePhase>>,
 
           Parallel::PhaseActions<
+              Parallel::Phase::WriteCheckpoint,
+              tmpl::list<evolution::Actions::RunEventsAndTriggers<
+                             Triggers::WhenToCheck::AtCheckpoints>,
+                         Parallel::Actions::TerminatePhase>>,
+
+          Parallel::PhaseActions<
               Parallel::Phase::InitializeTimeStepperHistory,
               SelfStart::self_start_procedure<dg_step_actions, system>>,
 
           Parallel::PhaseActions<
               Parallel::Phase::Evolve,
-              tmpl::list<
-                  evolution::Actions::RunEventsAndTriggers<local_time_stepping>,
+              tmpl::flatten<tmpl::list<
+                  std::conditional_t<local_time_stepping,
+                                     evolution::Actions::RunEventsAndTriggers<
+                                         Triggers::WhenToCheck::AtSteps>,
+                                     tmpl::list<>>,
+                  evolution::Actions::RunEventsAndTriggers<
+                      Triggers::WhenToCheck::AtSlabs>,
                   Actions::ChangeSlabSize, dg_step_actions,
                   Actions::AdvanceTime,
-                  PhaseControl::Actions::ExecutePhaseChange>>>>;
+                  PhaseControl::Actions::ExecutePhaseChange>>>>>;
 
   struct registration
       : tt::ConformsTo<Parallel::protocols::RegistrationMetavariables> {

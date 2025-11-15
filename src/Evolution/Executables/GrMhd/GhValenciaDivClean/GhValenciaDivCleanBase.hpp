@@ -26,6 +26,7 @@
 #include "Domain/Tags.hpp"
 #include "Evolution/Actions/RunEventsAndDenseTriggers.hpp"
 #include "Evolution/Actions/RunEventsAndTriggers.hpp"
+#include "Evolution/BoundaryCorrection.hpp"
 #include "Evolution/ComputeTags.hpp"
 #include "Evolution/Conservative/UpdateConservatives.hpp"
 #include "Evolution/Conservative/UpdatePrimitives.hpp"
@@ -68,7 +69,6 @@
 #include "Evolution/NumericInitialData.hpp"
 #include "Evolution/Systems/Cce/Callbacks/DumpBondiSachsOnWorldtube.hpp"
 #include "Evolution/Systems/GeneralizedHarmonic/BoundaryConditions/Factory.hpp"
-#include "Evolution/Systems/GeneralizedHarmonic/BoundaryCorrections/Factory.hpp"
 #include "Evolution/Systems/GeneralizedHarmonic/Equations.hpp"
 #include "Evolution/Systems/GeneralizedHarmonic/GaugeSourceFunctions/Factory.hpp"
 #include "Evolution/Systems/GeneralizedHarmonic/GaugeSourceFunctions/Gauges.hpp"
@@ -80,7 +80,7 @@
 #include "Evolution/Systems/GrMhd/GhValenciaDivClean/Actions/SetInitialData.hpp"
 #include "Evolution/Systems/GrMhd/GhValenciaDivClean/AllSolutions.hpp"
 #include "Evolution/Systems/GrMhd/GhValenciaDivClean/BoundaryConditions/Factory.hpp"
-#include "Evolution/Systems/GrMhd/GhValenciaDivClean/BoundaryCorrections/ProductOfCorrections.hpp"
+#include "Evolution/Systems/GrMhd/GhValenciaDivClean/BoundaryCorrections/Factory.hpp"
 #include "Evolution/Systems/GrMhd/GhValenciaDivClean/FiniteDifference/Tag.hpp"
 #include "Evolution/Systems/GrMhd/GhValenciaDivClean/SetPiAndPhiFromConstraints.hpp"
 #include "Evolution/Systems/GrMhd/GhValenciaDivClean/Subcell/FixConservativesAndComputePrims.hpp"
@@ -96,7 +96,6 @@
 #include "Evolution/Systems/GrMhd/GhValenciaDivClean/TimeDerivativeTerms.hpp"
 #include "Evolution/Systems/GrMhd/ValenciaDivClean/AllSolutions.hpp"
 #include "Evolution/Systems/GrMhd/ValenciaDivClean/BoundaryConditions/Factory.hpp"
-#include "Evolution/Systems/GrMhd/ValenciaDivClean/BoundaryCorrections/Factory.hpp"
 #include "Evolution/Systems/GrMhd/ValenciaDivClean/FixConservatives.hpp"
 #include "Evolution/Systems/GrMhd/ValenciaDivClean/KastaunEtAl.hpp"
 #include "Evolution/Systems/GrMhd/ValenciaDivClean/NewmanHamlin.hpp"
@@ -226,11 +225,10 @@
 #include "PointwiseFunctions/InitialDataUtilities/Tags/InitialData.hpp"
 #include "Time/Actions/AdvanceTime.hpp"
 #include "Time/Actions/CleanHistory.hpp"
-#include "Time/Actions/RecordTimeStepperData.hpp"
 #include "Time/Actions/SelfStartActions.hpp"
-#include "Time/Actions/UpdateU.hpp"
 #include "Time/ChangeSlabSize/Action.hpp"
 #include "Time/ChangeTimeStepperOrder.hpp"
+#include "Time/RecordTimeStepperData.hpp"
 #include "Time/StepChoosers/Factory.hpp"
 #include "Time/StepChoosers/StepChooser.hpp"
 #include "Time/Tags/Time.hpp"
@@ -240,6 +238,7 @@
 #include "Time/TimeSteppers/LtsTimeStepper.hpp"
 #include "Time/TimeSteppers/TimeStepper.hpp"
 #include "Time/Triggers/TimeTriggers.hpp"
+#include "Time/UpdateU.hpp"
 #include "Utilities/ErrorHandling/Error.hpp"
 #include "Utilities/Functional.hpp"
 #include "Utilities/NoSuchType.hpp"
@@ -644,6 +643,9 @@ struct GhValenciaDivCleanTemplateBase<
                        intrp::Events::InterpolateWithoutInterpComponent<
                            volume_dim, InterpolationTargetTags,
                            interpolator_source_vars>...>>>,
+        tmpl::pair<evolution::BoundaryCorrection,
+                   grmhd::GhValenciaDivClean::BoundaryCorrections::
+                       standard_boundary_corrections>,
         tmpl::pair<
             grmhd::GhValenciaDivClean::BoundaryConditions::BoundaryCondition,
             boundary_conditions>,
@@ -755,14 +757,16 @@ struct GhValenciaDivCleanTemplateBase<
           use_dg_element_collection>,
       tmpl::conditional_t<
           local_time_stepping,
-          tmpl::list<evolution::dg::Actions::ApplyLtsBoundaryCorrections<
-                         system, volume_dim, false, use_dg_element_collection>,
+          tmpl::list<Actions::MutateApply<RecordTimeStepperData<system>>,
+                     Actions::MutateApply<UpdateU<system, local_time_stepping>>,
+                     evolution::dg::Actions::ApplyLtsBoundaryCorrections<
+                         volume_dim, false, use_dg_element_collection>,
                      Actions::MutateApply<ChangeTimeStepperOrder<system>>>,
           tmpl::list<
               evolution::dg::Actions::ApplyBoundaryCorrectionsToTimeDerivative<
-                  system, volume_dim, false, use_dg_element_collection>,
-              Actions::RecordTimeStepperData<system>,
-              Actions::UpdateU<system>>>,
+                  volume_dim, false, use_dg_element_collection>,
+              Actions::MutateApply<RecordTimeStepperData<system>>,
+              Actions::MutateApply<UpdateU<system, local_time_stepping>>>>,
       Actions::CleanHistory<system, local_time_stepping>,
       Limiters::Actions::SendData<derived_metavars>,
       Limiters::Actions::Limit<derived_metavars>,
@@ -782,19 +786,17 @@ struct GhValenciaDivCleanTemplateBase<
           volume_dim, system, AllStepChoosers, local_time_stepping,
           use_dg_element_collection>,
       evolution::dg::Actions::ApplyBoundaryCorrectionsToTimeDerivative<
-          system, volume_dim, false, use_dg_element_collection>,
+          volume_dim, false, use_dg_element_collection>,
       tmpl::conditional_t<
           UseControlSystems,
           Actions::MutateApply<grmhd::GhValenciaDivClean::subcell::
                                    ZeroMhdTimeDerivatives<system>>,
           tmpl::list<>>,
-      tmpl::conditional_t<
-          local_time_stepping, tmpl::list<>,
-          tmpl::list<Actions::RecordTimeStepperData<system>,
-                     evolution::Actions::RunEventsAndDenseTriggers<
-                         events_and_dense_triggers_subcell_postprocessors>,
-                     control_system::Actions::LimitTimeStep<control_systems>,
-                     Actions::UpdateU<system>>>,
+      Actions::MutateApply<RecordTimeStepperData<system>>,
+      evolution::Actions::RunEventsAndDenseTriggers<
+          events_and_dense_triggers_subcell_postprocessors>,
+      control_system::Actions::LimitTimeStep<control_systems>,
+      Actions::MutateApply<UpdateU<system, local_time_stepping>>,
       // Note: The primitive variables are computed as part of the TCI.
       evolution::dg::subcell::Actions::TciAndRollback<
           grmhd::GhValenciaDivClean::subcell::TciOnDgGrid<
@@ -824,11 +826,11 @@ struct GhValenciaDivCleanTemplateBase<
           system, grmhd::ValenciaDivClean::ComputeFluxes, volume_dim, true>>,
       evolution::dg::subcell::fd::Actions::TakeTimeStep<
           grmhd::GhValenciaDivClean::subcell::TimeDerivative<system>>,
-      Actions::RecordTimeStepperData<system>,
+      Actions::MutateApply<RecordTimeStepperData<system>>,
       evolution::Actions::RunEventsAndDenseTriggers<
           events_and_dense_triggers_subcell_postprocessors>,
       control_system::Actions::LimitTimeStep<control_systems>,
-      Actions::UpdateU<system>,
+      Actions::MutateApply<UpdateU<system, local_time_stepping>>,
       Actions::CleanHistory<system, local_time_stepping>,
       Actions::MutateApply<
           grmhd::GhValenciaDivClean::subcell::FixConservativesAndComputePrims<
@@ -914,8 +916,13 @@ struct GhValenciaDivCleanTemplateBase<
                                  tmpl::list<dg_registration_list,
                                             Parallel::Actions::TerminatePhase>>,
           Parallel::PhaseActions<
+              Parallel::Phase::WriteCheckpoint,
+              tmpl::list<evolution::Actions::RunEventsAndTriggers<
+                             Triggers::WhenToCheck::AtCheckpoints>,
+                         Parallel::Actions::TerminatePhase>>,
+          Parallel::PhaseActions<
               Parallel::Phase::Evolve,
-              tmpl::list<
+              tmpl::flatten<tmpl::list<
                   ::domain::Actions::CheckFunctionsOfTimeAreReady<volume_dim>,
                   parameterized_deleptonization,
                   VariableFixing::Actions::FixVariables<
@@ -923,9 +930,14 @@ struct GhValenciaDivCleanTemplateBase<
                   VariableFixing::Actions::FixVariables<
                       VariableFixing::LimitLorentzFactor>,
                   Actions::UpdateConservatives,
-                  evolution::Actions::RunEventsAndTriggers<local_time_stepping>,
+                  std::conditional_t<local_time_stepping,
+                                     evolution::Actions::RunEventsAndTriggers<
+                                         Triggers::WhenToCheck::AtSteps>,
+                                     tmpl::list<>>,
+                  evolution::Actions::RunEventsAndTriggers<
+                      Triggers::WhenToCheck::AtSlabs>,
                   Actions::ChangeSlabSize, step_actions, Actions::AdvanceTime,
-                  PhaseControl::Actions::ExecutePhaseChange>>,
+                  PhaseControl::Actions::ExecutePhaseChange>>>,
 
           tmpl::conditional_t<
               UseControlSystems,

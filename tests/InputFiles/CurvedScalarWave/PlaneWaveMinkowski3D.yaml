@@ -1,7 +1,7 @@
 # Distributed under the MIT License.
 # See LICENSE.txt for details.
 
-Executable: EvolveCurvedScalarWavePlaneWaveMinkowski3D
+Executable: EvolveCurvedScalarWaveMinkowski3D
 Testing:
   Check: parse;execute_check_output
   Timeout: 15
@@ -83,6 +83,8 @@ Filtering:
     HalfPower: 32
     Enable: false
     BlocksToFilter: All
+
+EventsAndTriggersAtCheckpoints:
 
 EventsAndTriggersAtSlabs:
   - Trigger:

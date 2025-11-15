@@ -1,6 +1,7 @@
 # Distributed under the MIT License.
 # See LICENSE.txt for details.
 
+import glob
 import logging
 from pathlib import Path
 from typing import Optional, Union
@@ -11,10 +12,10 @@ import yaml
 from rich.pretty import pretty_repr
 
 import spectre.IO.H5 as spectre_h5
+from spectre.IO.H5 import available_subfiles, open_volfiles, select_observation
+from spectre.support.CliExceptions import RequiredChoiceError
 from spectre.support.DirectoryStructure import PipelineStep, list_pipeline_steps
 from spectre.support.Schedule import schedule, scheduler_options
-from spectre.Visualization.OpenVolfiles import open_volfiles
-from spectre.Visualization.ReadH5 import select_observation
 
 logger = logging.getLogger(__name__)
 
@@ -112,6 +113,7 @@ def inspiral_parameters(
     id_input_file: dict,
     id_metadata: dict,
     id_run_dir: Union[str, Path],
+    id_subfile_name: Optional[str],
     id_horizons_path: Optional[Union[str, Path]],
 ) -> dict:
     """Determine inspiral parameters from SpECTRE initial data.
@@ -123,6 +125,9 @@ def inspiral_parameters(
       id_metadata: Metadata of the initial data input file as a dictionary.
       id_run_dir: Directory of the initial data run. Paths in the input file
         are relative to this directory.
+      id_subfile_name: Subfile name inside the H5 volume files where the
+        initial data is stored. If 'None' and only one subfile exists, that
+        subfile is used. Otherwise, the subfile must be specified.
       id_horizons_path: Path to H5 file containing information about the
         horizons in the ID (e.g. mass, spin, spherical harmonic coefficients).
         If this is 'None', the default is the 'Horizons.h5' file inside
@@ -132,7 +137,25 @@ def inspiral_parameters(
     # and spins, not the values measured on the horizons, because these numbers
     # don't have to be exact and the horizon quantities will change a bit during
     # the evolution anyway.
-    target_params = id_metadata["TargetParams"]
+    if "TargetParams" in id_metadata:
+        target_params = id_metadata["TargetParams"]
+    else:
+        # Fall back to retrieving the target parameters from the input file
+        # for older initial data that didn't store them in the metadata.
+        # These are the conformal (background) Kerr-Schild parameters, but they
+        # are close enough to the target parameters for our purposes here.
+        id_binary = id_input_file["Background"]["Binary"]
+        object_left = id_binary["ObjectLeft"]["KerrSchild"]
+        object_right = id_binary["ObjectRight"]["KerrSchild"]
+        mass_ratio = object_right["Mass"] / object_left["Mass"]
+        target_params = {
+            "MassRatio": mass_ratio,
+            "MassA": object_right["Mass"],
+            "MassB": object_left["Mass"],
+            "DimensionlessSpinA": object_right["Spin"],
+            "DimensionlessSpinB": object_left["Spin"],
+        }
+
     mass_ratio = target_params["MassRatio"]
     mass_a = mass_ratio / (1.0 + mass_ratio)
     mass_b = 1.0 / (1.0 + mass_ratio)
@@ -156,12 +179,35 @@ def inspiral_parameters(
         id_domain_creator["ObjectA"]["XCoord"]
         - id_domain_creator["ObjectB"]["XCoord"]
     )
+
+    # Resolve subfile name in the H5 files
+    id_file_glob = str(
+        Path(id_run_dir).resolve()
+        / (id_input_file["Observers"]["VolumeFileName"] + "*.h5")
+    )
+    if not id_subfile_name:
+        id_subfiles = available_subfiles(
+            glob.glob(id_file_glob),
+            extension=".vol",
+        )
+        if len(id_subfiles) == 1:
+            id_subfile_name = id_subfiles[0]
+            logger.info(
+                f"Selected subfile {id_subfile_name} (the only available one)."
+            )
+        else:
+            raise RequiredChoiceError(
+                (
+                    "Specify '--id-subfile-name' to select a subfile containing"
+                    " volume data."
+                ),
+                choices=id_subfiles,
+            )
+
     params = {
         # Initial data files
-        "IdFileGlob": str(
-            Path(id_run_dir).resolve()
-            / (id_input_file["Observers"]["VolumeFileName"] + "*.h5")
-        ),
+        "IdFileGlob": id_file_glob,
+        "IdSubfile": id_subfile_name,
         "IdFromEvolution": id_from_evolution,
         # Domain geometry
         "ExcisionRadiusA": (
@@ -192,9 +238,9 @@ def inspiral_parameters(
 
     # Initial functions of time (set from ID or load from evolution data)
     if id_from_evolution:
-        first_volfile = params["IdFileGlob"].replace("*", "0")
+        first_volfile = id_file_glob.replace("*", "0")
         _, obs_time = select_observation(
-            open_volfiles([first_volfile], "VolumeData"), step=-1
+            open_volfiles(first_volfile, id_subfile_name), step=-1
         )
         params.update(
             {
@@ -358,6 +404,7 @@ def start_inspiral(
     refinement_level: Optional[int] = None,
     polynomial_order: Optional[int] = None,
     id_run_dir: Optional[Union[str, Path]] = None,
+    id_subfile_name: Optional[str] = None,
     inspiral_input_file_template: Union[
         str, Path
     ] = INSPIRAL_INPUT_FILE_TEMPLATE,
@@ -410,13 +457,14 @@ def start_inspiral(
             id_input_file,
             id_metadata,
             id_run_dir,
+            id_subfile_name=id_subfile_name,
             id_horizons_path=id_horizons_path,
         )
 
     # Determine resolution
     if lev is not None:
         assert (refinement_level is None) and (polynomial_order is None), (
-            "The option 'lev' is mutaully exclusive with 'refinement_level' and"
+            "The option 'lev' is mutually exclusive with 'refinement_level' and"
             " 'polynomial_order'."
         )
         selected_lev = INSPIRAL_LEVS[lev]
@@ -477,9 +525,9 @@ def start_inspiral(
         and scheduler_kwargs.get("num_procs") is None
         and scheduler_kwargs.get("num_nodes") is None
     ):
-        # Just run on 4 nodes for now, because 1 is surely not enough. We can
+        # By default just run on a fixed number of cores for now. We can
         # make this smarter later (e.g. scale with the number of elements).
-        scheduler_kwargs["num_nodes"] = 4
+        scheduler_kwargs["num_procs"] = 180
 
     # Schedule!
     return schedule(
@@ -523,6 +571,14 @@ def start_inspiral(
     show_default="directory of the ID_INPUT_FILE_PATH",
 )
 @click.option(
+    "--id-subfile-name",
+    help=(
+        "Name of the subfile within the initial data H5 files containing the "
+        "volume data to read in. "
+        "Optional if the H5 files have only one subfile."
+    ),
+)
+@click.option(
     "--inspiral-input-file-template",
     type=click.Path(
         exists=True,
@@ -557,10 +613,9 @@ def start_inspiral(
     "--lev",
     type=int,
     help=(
-        "Resolution levels defined in terms of h and p refinement. Can be"
-        " specified multiple times. For integer N, LevN corresponds to"
-        " refinement level L = 1 and polynomial order P = 7 + N. Mutually"
-        " exclusive with options '-L' and '-P'"
+        "Resolution levels defined in terms of h and p refinement. For integer"
+        " N, LevN corresponds to refinement level L = 1 and polynomial order P"
+        " = 7 + N. Mutually exclusive with options '-L' and '-P'"
     ),
 )
 @click.option(

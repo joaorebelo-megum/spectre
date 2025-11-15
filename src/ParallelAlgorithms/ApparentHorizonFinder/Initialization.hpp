@@ -22,6 +22,8 @@ namespace ah {
  * GlobalCache:
  * - Uses:
  *   - `ah::Tags::ApparentHorizonOptions`
+ *   - `ah::Tags::BlocksForHorizonFind`
+ *   - `ah::Tags::LMax`
  *
  * DataBox:
  * - Uses: Nothing
@@ -52,8 +54,8 @@ struct Initialize {
   using simple_tags = tmpl::append<
       tmpl::list<Tags::CurrentResolutionL, Tags::Verbosity, Tags::FastFlow,
                  Tags::CurrentTime, Tags::PendingTimes, Tags::CompletedTimes,
-                 Tags::Storage<Fr>, Tags::PreviousSurfaces<Fr>,
-                 ylm::Tags::Strahlkorper<Fr>,
+                 Tags::Storage<Fr>, Tags::BlockSearchOrder,
+                 Tags::PreviousSurfaces<Fr>, ylm::Tags::Strahlkorper<Fr>,
                  ylm::Tags::TimeDerivStrahlkorper<Fr>, ah::Tags::Dependency,
                  ::Tags::Variables<ah::vars_to_interpolate_to_target<3, Fr>>>,
       tmpl::conditional_t<
@@ -63,13 +65,14 @@ struct Initialize {
   using const_global_cache_tags =
       tmpl::remove_duplicates<tmpl::flatten<tmpl::append<
           tmpl::list<Tags::ApparentHorizonOptions<HorizonMetavars>,
-                     Tags::BlocksForHorizonFind>,
+                     Tags::BlocksForHorizonFind, Tags::LMax>,
           Parallel::get_const_global_cache_tags_from_actions<tmpl::flatten<
               tmpl::list<typename HorizonMetavars::horizon_find_callbacks,
                          typename HorizonMetavars::
                              horizon_find_failure_callbacks>>>>>>;
 
-  using mutable_global_cache_tags = tmpl::list<>;
+  using mutable_global_cache_tags =
+      tmpl::list<Tags::PreviousSurface<HorizonMetavars>>;
 
   using compute_tags = ah::compute_items_on_target<3, Fr>;
 

@@ -68,6 +68,7 @@ class TestInitialData(unittest.TestCase):
                 dat_file.append([[0.0, 1.0, 0.3]])
         start_inspiral(
             id_input_file_path=self.test_dir / "ID" / "InitialData.yaml",
+            id_subfile_name="VolumeData",
             refinement_level=1,
             polynomial_order=5,
             segments_dir=self.test_dir / "Inspiral",
@@ -183,15 +184,11 @@ class TestInitialData(unittest.TestCase):
             inspiral_metadata,
             self.inspiral_dir,
             fot_vol_subfile="ForContinuation",
-            refinement_level=1,
-            polynomial_order=5,
         )
         self.assertEqual(
             params["IdFileGlob"],
             str((self.inspiral_dir).resolve() / "BbhVolume*.h5"),
         )
-        self.assertEqual(params["L"], 1)
-        self.assertEqual(params["P"], 5)
 
     def test_cli(self):
         # Not using `CliRunner.invoke()` because it runs in an isolated
@@ -205,7 +202,7 @@ class TestInitialData(unittest.TestCase):
                     "--polynomial-order",
                     "5",
                     "-O",
-                    str(self.test_dir),
+                    str(self.test_dir / "Ringdown"),
                     "--match-time",
                     "5000.0",
                     "--number-of-ahc-finds-for-fit",
@@ -221,9 +218,39 @@ class TestInitialData(unittest.TestCase):
             )
         except SystemExit as e:
             self.assertEqual(e.code, 0)
-        self.assertTrue((self.test_dir / "Segment_0000/Ringdown.yaml").exists())
+        self.assertTrue(
+            (self.test_dir / "Ringdown/Segment_0000/Ringdown.yaml").exists()
+        )
         self.assertTrue(
             (self.test_dir / "RingdownCoefs.h5").exists(),
+        )
+        try:
+            start_ringdown_command(
+                [
+                    str(self.inspiral_dir),
+                    "--lev",
+                    "1",
+                    "-d",
+                    str(self.test_dir / "Pipeline"),
+                    "--number-of-ahc-finds-for-fit",
+                    "5",
+                    "-E",
+                    str(self.bin_dir / "EvolveGhSingleBlackHole"),
+                    "--no-submit",
+                ]
+            )
+        except SystemExit as e:
+            self.assertEqual(e.code, 0)
+        self.assertTrue(
+            (
+                self.test_dir
+                / "Pipeline/000_Ringdown/Segment_0000/Ringdown.yaml"
+            ).exists()
+        )
+        self.assertTrue(
+            (
+                self.test_dir / "Pipeline/000_Ringdown/RingdownShapeCoefs.h5"
+            ).exists(),
         )
 
 

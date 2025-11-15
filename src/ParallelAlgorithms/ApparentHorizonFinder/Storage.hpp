@@ -19,6 +19,7 @@
 #include "Domain/Structure/ElementId.hpp"
 #include "NumericalAlgorithms/Spectral/Mesh.hpp"
 #include "NumericalAlgorithms/SphericalHarmonics/Strahlkorper.hpp"
+#include "Parallel/MultiReaderSpinlock.hpp"
 #include "ParallelAlgorithms/ApparentHorizonFinder/Destination.hpp"
 #include "ParallelAlgorithms/ApparentHorizonFinder/FastFlow.hpp"
 #include "ParallelAlgorithms/ApparentHorizonFinder/HorizonAliases.hpp"
@@ -36,22 +37,11 @@ struct VolumeVariables {
   Mesh<3> mesh;
 
   /*!
-   * \brief A `Variables` of the  `ah::source_vars` in the volume.
-   */
-  Variables<ah::source_vars<3>> source_vars;
-
-  /*!
    * \brief A `Variables` of the tensors in the volume that we need to
    * interpolate onto the horizon.
    */
   Variables<ah::vars_to_interpolate_to_target<3, Fr>>
       vars_to_interpolate_to_target{};
-
-  /*!
-   * \brief A flag that ensures that the variables to interpolate onto the
-   * horizon are only computed once.
-   */
-  bool done_computing_vars_to_interpolate_to_target = false;
 
   // NOLINTNEXTLINE(google-runtime-references)
   void pup(PUP::er& p);
@@ -90,20 +80,46 @@ struct Iteration {
   Variables<ah::vars_to_interpolate_to_target<3, Fr>> interpolated_vars{};
   /*!
    * \brief Keeps track of the indices in `interpolated_vars` that have
-   * already beed interpolated to.
+   * already been interpolated to.
    */
-  std::set<size_t> indicies_interpolated_to_thus_far;
+  std::vector<bool> indices_interpolated_to_thus_far{};
   /*!
-   * \brief Holds the `ElementId`s of `Element`s for which interpolation has
-   * already been done.
+   * \brief Holds the element IDs of all elements that intersect with the
+   * current iteration surface. Used to determine which elements will send
+   * data for the next horizon find.
    */
-  std::unordered_set<ElementId<3>> interpolation_is_done_for_these_elements;
+  std::unordered_set<ElementId<3>> intersecting_element_ids{};
+  /*!
+   * \brief Offsets of newly interpolated points in the overall tensor (used as
+   * memory buffer)
+   */
+  std::vector<size_t> offsets_of_newly_interpolated_points{};
+  /*!
+   * \brief Logical coordinates of newly interpolated points (used as memory
+   * buffer)
+   *
+   * These `std::vector`s are used to reserve memory and then append points to
+   * them as we find them in an element. The memory is reused for each element.
+   * Then, a non-owning DataVector is created by pointing into this memory.
+   * That's why this is a `std::array` of `std::vector`s, not vice versa.
+   */
+  std::array<std::vector<double>, 3>
+      x_element_logical_of_newly_interpolated_points{};
+  /*!
+   * \brief Buffer for newly interpolated variables (used as memory buffer)
+   */
+  std::vector<double> newly_interpolated_vars_buffer{};
 
   /*!
    * \brief How many times we've tried to compute the coordinates for this
    * iteration.
    */
   size_t compute_coords_retries = 0;
+
+  /*!
+   * \brief Whether all points in `interpolated_vars` have been filled.
+   */
+  bool interpolation_is_complete() const;
 
   void reset_for_next_iteration();
 
@@ -128,7 +144,17 @@ struct SingleTimeStorage {
    * \brief Map between `ElementId`s and the volume variables from that element.
    */
   std::unordered_map<ElementId<3>, VolumeVariables<Fr>> all_volume_variables;
-
+  /*!
+   * \brief Elements in which we have found points to interpolate to in previous
+   * iterations, to try first before searching all elements.
+   *
+   * This is not only a performance optimization, but also important for
+   * robustness. If we try to interpolate from elements in a different order in
+   * each iteration, then points that lie directly on element boundaries can
+   * fluctuate in interpolated value, preventing convergence (see
+   * https://github.com/sxs-collaboration/spectre/issues/3899).
+   */
+  std::vector<ElementId<3>> element_order{};
   /*!
    * \brief The `Iteration` data for the current fast flow iteration.
    */
@@ -165,10 +191,12 @@ template <typename Fr>
 struct PreviousSurface {
   PreviousSurface() = default;
   PreviousSurface(const LinkedMessageId<double>& time_in,
-                  ylm::Strahlkorper<Fr> surface_in);
+                  ylm::Strahlkorper<Fr> surface_in,
+                  std::unordered_set<ElementId<3>> intersecting_element_ids_in);
 
   LinkedMessageId<double> time;
   ylm::Strahlkorper<Fr> surface;
+  std::unordered_set<ElementId<3>> intersecting_element_ids;
 
   // NOLINTNEXTLINE(google-runtime-references)
   void pup(PUP::er& p);
@@ -178,4 +206,38 @@ template <typename Fr>
 bool operator==(const PreviousSurface<Fr>& lhs, const PreviousSurface<Fr>& rhs);
 template <typename Fr>
 bool operator!=(const PreviousSurface<Fr>& lhs, const PreviousSurface<Fr>& rhs);
+
+/*!
+ * \brief Holds a previous surface and a lock that protects it.
+ *
+ * \details This is used to store and update a previous surface in the global
+ * cache and allow multiple readers (elements) to access it simultaneously.
+ */
+template <typename Fr>
+struct LockedPreviousSurface {
+  std::optional<PreviousSurface<Fr>> surface;
+  // Lock is mutable so it can be retrieved from the const global cache and put
+  // in read-lock mode by elements.
+  // NOLINTNEXTLINE(spectre-mutable)
+  mutable Parallel::MultiReaderSpinlock lock;
+
+  LockedPreviousSurface();
+  explicit LockedPreviousSurface(const PreviousSurface<Fr>& rhs);
+  LockedPreviousSurface(const LockedPreviousSurface& rhs);
+  LockedPreviousSurface& operator=(const LockedPreviousSurface& rhs);
+  LockedPreviousSurface(LockedPreviousSurface&& rhs);
+  LockedPreviousSurface& operator=(LockedPreviousSurface&& rhs);
+  ~LockedPreviousSurface() = default;
+
+  // NOLINTNEXTLINE(google-runtime-references)
+  void pup(PUP::er& p);
+};
+
+template <typename Fr>
+bool operator==(const LockedPreviousSurface<Fr>& lhs,
+                const LockedPreviousSurface<Fr>& rhs);
+template <typename Fr>
+bool operator!=(const LockedPreviousSurface<Fr>& lhs,
+                const LockedPreviousSurface<Fr>& rhs);
+
 }  // namespace ah::Storage

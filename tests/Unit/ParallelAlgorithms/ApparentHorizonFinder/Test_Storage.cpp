@@ -34,37 +34,55 @@ template <typename Fr>
 void test_storage() {
   const ah::Storage::VolumeVariables<Fr> volume_variables{
       Mesh<3>{3, Spectral::Basis::Legendre, Spectral::Quadrature::GaussLobatto},
-      Variables<ah::source_vars<3>>{4, 1.234},
       Variables<ah::vars_to_interpolate_to_target<3, Fr>>{4, 4.321}};
-  CHECK(not volume_variables.done_computing_vars_to_interpolate_to_target);
   test_serialization(volume_variables);
 
-  const ah::Storage::Iteration<Fr> iteration{
+  ah::Storage::Iteration<Fr> iteration{
       ylm::Strahlkorper<Fr>{4_st, 3.0, std::array{0.0, 0.1, 0.2}},
       std::optional<std::vector<BlockLogicalCoords<3>>>{{std::nullopt}},
       Variables<ah::vars_to_interpolate_to_target<3, Fr>>{6, 9.876},
-      std::set<size_t>{1_st, 4_st, 5_st},
-      std::unordered_set<ElementId<3>>{ElementId<3>{0}, ElementId<3>{1}},
+      std::vector<bool>{false, true, false, false, true, true},
+      {},
+      {},
+      {},
       {2}};
   test_serialization(iteration);
+  CHECK_FALSE(iteration.interpolation_is_complete());
+  for (size_t i = 0; i < iteration.indices_interpolated_to_thus_far.size();
+       ++i) {
+    iteration.indices_interpolated_to_thus_far[i] = true;
+  }
+  CHECK(iteration.interpolation_is_complete());
 
   const ah::Storage::SingleTimeStorage<Fr> single_time_storage{
       std::unordered_map<ElementId<3>, ah::Storage::VolumeVariables<Fr>>{
           {ElementId<3>{0}, volume_variables}},
-      iteration, iteration.strahlkorper, Destination::ControlSystem};
+      {},
+      iteration,
+      iteration.strahlkorper,
+      Destination::ControlSystem};
   test_serialization(single_time_storage);
 
   const ah::Storage::PreviousSurface<Fr> previous_surface{
-      LinkedMessageId<double>{3.0, {2.0}}, iteration.strahlkorper};
+      LinkedMessageId<double>{3.0, {2.0}},
+      iteration.strahlkorper,
+      {ElementId<3>{1}, ElementId<3>{3}}};
   test_serialization(previous_surface);
 
   // Check we can use PreviousSurface with `emplace`
   std::deque<ah::Storage::PreviousSurface<Fr>> previous_surfaces{};
-  previous_surfaces.emplace_front(LinkedMessageId<double>{1.0, std::nullopt},
-                                  iteration.strahlkorper);
+  previous_surfaces.emplace_front(
+      LinkedMessageId<double>{1.0, std::nullopt}, iteration.strahlkorper,
+      std::unordered_set<ElementId<3>>{ElementId<3>{4}, ElementId<3>{5}});
   CHECK(previous_surfaces.front().time ==
         LinkedMessageId<double>{1.0, std::nullopt});
   CHECK(previous_surfaces.front().surface == iteration.strahlkorper);
+  CHECK(previous_surfaces.front().intersecting_element_ids ==
+        std::unordered_set<ElementId<3>>{ElementId<3>{4}, ElementId<3>{5}});
+
+  ah::Storage::LockedPreviousSurface<Fr> locked_previous_surface{};
+  locked_previous_surface.surface = previous_surface;
+  test_serialization(locked_previous_surface);
 }
 }  // namespace
 

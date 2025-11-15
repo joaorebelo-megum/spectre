@@ -103,7 +103,7 @@ struct MinGridSpacingFormatter
   std::string operator()(const double time, const double min_grid_spacing) {
     return "Time: " + get_output(time) +
            ", Global inertial minimum grid spacing: " +
-           get_output(min_grid_spacing);
+           get_output(min_grid_spacing) + "\n";
   }
   void pup(PUP::er& /*p*/) {}
 };
@@ -361,11 +361,16 @@ struct Metavariables {
                                             Parallel::Actions::TerminatePhase>>,
           Parallel::PhaseActions<
               Parallel::Phase::Execute,
-              tmpl::list<
+              tmpl::flatten<tmpl::list<
                   Actions::AdvanceTime, Actions::ExportCoordinates<Dim>,
                   Actions::FindGlobalMinimumGridSpacing,
-                  evolution::Actions::RunEventsAndTriggers<local_time_stepping>,
-                  PhaseControl::Actions::ExecutePhaseChange>>>>;
+                  std::conditional_t<local_time_stepping,
+                                     evolution::Actions::RunEventsAndTriggers<
+                                         Triggers::WhenToCheck::AtSteps>,
+                                     tmpl::list<>>,
+                  evolution::Actions::RunEventsAndTriggers<
+                      Triggers::WhenToCheck::AtSlabs>,
+                  PhaseControl::Actions::ExecutePhaseChange>>>>>;
 
   struct amr : tt::ConformsTo<::amr::protocols::AmrMetavariables> {
     using element_array = dg_element_array;

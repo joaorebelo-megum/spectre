@@ -132,12 +132,14 @@ Filtering:
 
 SpatialDiscretization:
   BoundaryCorrection:
-    ProductUpwindPenaltyGHAndUpwindPenaltyScalar:
-      UpwindPenaltyGH:
+    ProductAveragedUpwindPenaltyGHAndUpwindPenaltyScalar:
+      AveragedUpwindPenaltyGH:
       UpwindPenaltyScalar:
   DiscontinuousGalerkin:
     Formulation: StrongInertial
     Quadrature: GaussLobatto
+
+EventsAndTriggersAtCheckpoints:
 
 EventsAndTriggersAtSlabs:
   - Trigger:
@@ -230,10 +232,11 @@ Interpolator:
   Verbosity: Silent
 
 ApparentHorizons:
+  LMax: &LMax 4
   ApparentHorizon: &Ah
     Criteria:
     InitialGuess:
-      LMax: &LMax 4
+      LMax: *LMax
       Radius: 2.2
       Center: [0., 0., 0.]
     FastFlow:
@@ -275,6 +278,7 @@ Cce:
 ControlSystems:
   WriteDataToDisk: false
   MeasurementsPerUpdate: 4
+  DelayUpdate: true
   Verbosity: Silent
   Shape: None
   Translation: None

@@ -216,8 +216,8 @@ EvolutionSystem:
 
 SpatialDiscretization:
   BoundaryCorrection:
-    ProductUpwindPenaltyAndHll:
-      UpwindPenalty:
+    ProductAveragedUpwindPenaltyAndHll:
+      AveragedUpwindPenalty:
       Hll:
         MagneticFieldMagnitudeForHydro: 1.0e-16
         LightSpeedDensityCutoff: 1.0e-8
@@ -269,6 +269,8 @@ Filtering:
     HalfPower: 420
     Enable: true
     BlocksToFilter: All
+
+EventsAndTriggersAtCheckpoints:
 
 EventsAndTriggersAtSlabs:
   # Set time step at t=0
@@ -486,6 +488,7 @@ ControlSystems:
     RotationDecayTimescale: 60.0
   WriteDataToDisk: true
   MeasurementsPerUpdate: 4
+  DelayUpdate: true
   Verbosity: Silent
   Expansion: None
   Rotation:

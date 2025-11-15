@@ -38,6 +38,7 @@
 #include "Domain/Tags.hpp"
 #include "Domain/TagsTimeDependent.hpp"
 #include "Evolution/BoundaryConditions/Type.hpp"
+#include "Evolution/BoundaryCorrection.hpp"
 #include "Evolution/BoundaryCorrectionTags.hpp"
 #include "Evolution/DiscontinuousGalerkin/Actions/ComputeTimeDerivative.hpp"
 #include "Evolution/DiscontinuousGalerkin/Actions/VolumeTermsImpl.tpp"
@@ -76,7 +77,6 @@
 #include "Time/Tags/AdaptiveSteppingDiagnostics.hpp"
 #include "Time/Tags/HistoryEvolvedVariables.hpp"
 #include "Time/Tags/StepChoosers.hpp"
-#include "Time/Tags/StepperErrorEstimatesEnabled.hpp"
 #include "Time/Tags/Time.hpp"
 #include "Time/Tags/TimeStep.hpp"
 #include "Time/Tags/TimeStepId.hpp"
@@ -503,26 +503,7 @@ struct NonconservativeNormalDotFlux {
 };
 
 template <size_t Dim, bool HasPrims>
-struct BoundaryTerms;
-
-template <size_t Dim, bool HasPrims>
-class BoundaryCorrection : public PUP::able {
- public:
-  BoundaryCorrection() = default;
-  BoundaryCorrection(const BoundaryCorrection&) = default;
-  BoundaryCorrection& operator=(const BoundaryCorrection&) = default;
-  BoundaryCorrection(BoundaryCorrection&&) = default;
-  BoundaryCorrection& operator=(BoundaryCorrection&&) = default;
-
-  ~BoundaryCorrection() override = default;
-
-  WRAPPED_PUPable_abstract(BoundaryCorrection);  // NOLINT
-
-  using creatable_classes = tmpl::list<BoundaryTerms<Dim, HasPrims>>;
-};
-
-template <size_t Dim, bool HasPrims>
-struct BoundaryTerms final : public BoundaryCorrection<Dim, HasPrims> {
+struct BoundaryTerms final : public ::evolution::BoundaryCorrection {
   struct MaxAbsCharSpeed : db::SimpleTag {
     using type = Scalar<DataVector>;
   };
@@ -542,8 +523,12 @@ struct BoundaryTerms final : public BoundaryCorrection<Dim, HasPrims> {
   using variables_tags = tmpl::list<Var1, Var2<Dim>>;
   using variables_tag = Tags::Variables<variables_tags>;
 
+  std::unique_ptr<BoundaryCorrection> get_clone() const override {
+    return std::make_unique<BoundaryTerms>(*this);
+  }
+
   void pup(PUP::er& p) override {  // NOLINT
-    BoundaryCorrection<Dim, HasPrims>::pup(p);
+    BoundaryCorrection::pup(p);
   }
 
   /// [bt_nnv]
@@ -873,8 +858,6 @@ struct System {
       HasPrimitiveVariables;
   static constexpr size_t volume_dim = Dim;
 
-  using boundary_correction_base =
-      BoundaryCorrection<Dim, has_primitive_and_conservative_vars>;
   using boundary_conditions_base = BoundaryCondition<Dim>;
 
   using variables_tag = Tags::Variables<tmpl::list<Var1, Var2<Dim>>>;
@@ -929,7 +912,6 @@ struct component {
       domain::Tags::MeshVelocity<Metavariables::volume_dim>,
       domain::Tags::DivMeshVelocity,
       domain::Tags::ElementMap<Metavariables::volume_dim, Frame::Grid>,
-      ::Tags::StepperErrorEstimatesEnabled,
       tmpl::conditional_t<
           Metavariables::local_time_stepping,
           tmpl::list<::Tags::StepChoosers,
@@ -1007,11 +989,13 @@ struct Metavariables {
                  domain::Tags::Domain<Dim>>;
   struct factory_creation
       : tt::ConformsTo<Options::protocols::FactoryCreation> {
-    using factory_classes =
-        tmpl::map<tmpl::pair<BoundaryCondition<Dim>,
-                             tmpl::list<DemandOutgoingCharSpeeds<Dim>>>,
-                  tmpl::pair<StepChooser<StepChooserUse::LtsStep>,
-                             tmpl::list<StepChoosers::Constant>>>;
+    using factory_classes = tmpl::map<
+        tmpl::pair<BoundaryCondition<Dim>,
+                   tmpl::list<DemandOutgoingCharSpeeds<Dim>>>,
+        tmpl::pair<::evolution::BoundaryCorrection,
+                   tmpl::list<BoundaryTerms<Dim, HasPrimitiveVariables>>>,
+        tmpl::pair<StepChooser<StepChooserUse::LtsStep>,
+                   tmpl::list<StepChoosers::Constant>>>;
   };
 
   using component_list = tmpl::list<component<Metavariables>>;
@@ -1366,7 +1350,6 @@ void test_impl(const Spectral::Quadrature quadrature,
              self_id,
              domain::make_coordinate_map_base<Frame::BlockLogical, Frame::Grid>(
                  domain::CoordinateMaps::Identity<Dim>{})},
-         false,
          std::move(step_choosers),
          static_cast<std::unique_ptr<LtsTimeStepper>>(
              std::make_unique<TimeSteppers::AdamsBashforth>(5))});
@@ -1399,7 +1382,6 @@ void test_impl(const Spectral::Quadrature quadrature,
                  domain::make_coordinate_map_base<Frame::BlockLogical,
                                                   Frame::Grid>(
                      domain::CoordinateMaps::Identity<Dim>{})},
-             false,
              std::move(step_choosers),
              static_cast<std::unique_ptr<LtsTimeStepper>>(
                  std::make_unique<TimeSteppers::AdamsBashforth>(5))});
@@ -1431,7 +1413,6 @@ void test_impl(const Spectral::Quadrature quadrature,
              self_id,
              domain::make_coordinate_map_base<Frame::BlockLogical, Frame::Grid>(
                  domain::CoordinateMaps::Identity<Dim>{})},
-         false,
          static_cast<std::unique_ptr<LtsTimeStepper>>(
              std::make_unique<TimeSteppers::AdamsBashforth>(5))});
     for (const auto& [direction, neighbor_ids] : neighbors) {
@@ -1463,7 +1444,6 @@ void test_impl(const Spectral::Quadrature quadrature,
                  domain::make_coordinate_map_base<Frame::BlockLogical,
                                                   Frame::Grid>(
                      domain::CoordinateMaps::Identity<Dim>{})},
-             false,
              static_cast<std::unique_ptr<LtsTimeStepper>>(
                  std::make_unique<TimeSteppers::AdamsBashforth>(5))});
       }
@@ -2052,11 +2032,6 @@ void test() {
   //   the fluxes, and lifting the boundary contributions to the volume, even
   //   though the mesh velocity and boundary contributions are not the correct
   //   DG values
-
-  register_derived_classes_with_charm<
-      BoundaryCorrection<Dim, true>>();
-  register_derived_classes_with_charm<
-      BoundaryCorrection<Dim, false>>();
 
   constexpr bool use_nodegroup_dg_elements = false;
 

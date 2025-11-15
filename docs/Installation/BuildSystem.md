@@ -185,6 +185,9 @@ alphabetical order):
   - Set to a path to a SpEC installation (the SpEC repository root) to link in
     SpEC libraries. In particular, the SpEC::Exporter library is linked in and
     enables loading SpEC data into SpECTRE. See \ref installation for details.
+- SPECTRE_AUTODIFF
+  - Enable automatic differentation (default is `OFF`). This is required for
+    computing Hessians.
 - SPECTRE_DEBUG
   - Defines `SPECTRE_DEBUG` macro to enable `ASSERT`s and other debug
     checks so they can be used in Release builds. That is, you get sanity checks
@@ -295,7 +298,7 @@ alphabetical order):
     vectorize addition math functions like `sin`, `cos`, and `exp`.
     Defines the macro `SPECTRE_USE_XSIMD`, which can be check to enable manual
     vectorization where necessary.
-    (default is `OFF`)
+    (default is `ON`)
 
 ## CMake targets
 

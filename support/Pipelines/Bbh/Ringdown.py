@@ -19,11 +19,23 @@ from spectre.Evolution.Ringdown.ComputeAhCCoefsInRingdownDistortedFrame import (
 from spectre.IO.H5.FunctionsOfTimeFromVolume import (
     functions_of_time_from_volume,
 )
+from spectre.support.DirectoryStructure import PipelineStep, list_pipeline_steps
 from spectre.support.Schedule import schedule, scheduler_options
 
 logger = logging.getLogger(__name__)
 
 RINGDOWN_INPUT_FILE_TEMPLATE = Path(__file__).parent / "Ringdown.yaml"
+
+# Resolution levels defined in terms of p-refinement
+# To be replaced once AMR is used.
+RINGDOWN_LEVS = {
+    lev_number: {
+        "label": f"Lev{lev_number}",
+        "refinement_level": 2,
+        "polynomial_order": 10 + lev_number,
+    }
+    for lev_number in range(-2, 11)
+}
 
 
 def ringdown_parameters(
@@ -31,8 +43,6 @@ def ringdown_parameters(
     inspiral_metadata: dict,
     inspiral_run_dir: Union[str, Path],
     fot_vol_subfile: str,
-    refinement_level: int,
-    polynomial_order: int,
 ) -> dict:
     """Determine ringdown parameters from the inspiral.
 
@@ -53,9 +63,6 @@ def ringdown_parameters(
             / (inspiral_input_file["Observers"]["VolumeFileName"] + "*.h5")
         ),
         "IdFileGlobSubgroup": fot_vol_subfile,
-        # Resolution
-        "L": refinement_level,
-        "P": polynomial_order,
         # Store target parameters in the input file
         "TargetParams": yaml.safe_dump(
             {"TargetParams": inspiral_metadata["TargetParams"]}
@@ -69,8 +76,9 @@ def start_ringdown(
     match_time: float,
     settling_timescale: float,
     zero_coefs_eps: float,
-    refinement_level: int,
-    polynomial_order: int,
+    lev: Optional[int],
+    refinement_level: Optional[int],
+    polynomial_order: Optional[int],
     inspiral_input_file: Optional[Union[str, Path]] = None,
     ahc_reductions_path: Optional[Union[str, Path]] = None,
     ahc_subfile: str = "ObservationAhC_Ylm",
@@ -157,18 +165,52 @@ def start_ringdown(
     if pipeline_dir:
         pipeline_dir = Path(pipeline_dir).resolve()
     if pipeline_dir and not segments_dir and not run_dir:
-        segments_dir = pipeline_dir / "003_Ringdown"
+        pipeline_steps = list_pipeline_steps(pipeline_dir)
+        if pipeline_steps:
+            segments_dir = pipeline_steps[-1].next(label="Ringdown").path
+        else:
+            segments_dir = PipelineStep.first(
+                directory=pipeline_dir, label="Ringdown"
+            ).path
 
-    if path_to_output_h5 is None:
-        path_to_output_h5 = pipeline_dir / "RingdownDistortedCoefs.h5"
+    if path_to_output_h5 == None:
+        ringdown_dir = Path(segments_dir or run_dir)
+        ringdown_dir.mkdir(parents=True, exist_ok=True)
+        path_to_output_h5 = (
+            Path(ringdown_dir).resolve() / "RingdownShapeCoefs.h5"
+        )
+    else:
+        path_to_output_h5 = Path(path_to_output_h5).resolve()
 
     ringdown_params = ringdown_parameters(
         inspiral_input_file,
         inspiral_metadata,
         inspiral_run_dir,
         fot_vol_subfile=fot_vol_subfile,
-        refinement_level=refinement_level,
-        polynomial_order=polynomial_order,
+    )
+
+    # Determine resolution
+    if lev is not None:
+        assert (refinement_level is None) and (polynomial_order is None), (
+            "The option 'lev' is mutually exclusive with 'refinement_level' and"
+            " 'polynomial_order'."
+        )
+        selected_lev = RINGDOWN_LEVS[lev]
+        refinement_level = selected_lev["refinement_level"]
+        polynomial_order = selected_lev["polynomial_order"]
+    else:
+        assert (refinement_level is not None) and (
+            polynomial_order is not None
+        ), (
+            "Resolution not specified. Provide either 'lev' or both"
+            " 'refinement_level' and 'polynomial_order'."
+        )
+    ringdown_params.update(
+        {
+            "Lev": lev,
+            "L": refinement_level,
+            "P": polynomial_order,
+        }
     )
 
     evaluated_fot_dict = functions_of_time_from_volume(
@@ -271,20 +313,25 @@ def start_ringdown(
         width=float("inf"),
     ).strip()
 
-    # To avoid interpolation errors, put outer boundary of ringdown domain
-    # slightly inside the outer boundary of the inspiral domain
-    ringdown_params["OuterBdryRadius"] = (
-        inspiral_input_file["DomainCreator"]["BinaryCompactObject"][
-            "OuterShell"
-        ]["Radius"]
-        - 1.0e-4
-    )
+    ringdown_params["OuterBdryRadius"] = inspiral_input_file["DomainCreator"][
+        "BinaryCompactObject"
+    ]["OuterShell"]["Radius"]
     # Give the black hole 200M to relax, and then the light travel time
     # to the outer boundary for the gravitational waves to leave the domain
     ringdown_params["FinalTime"] = (
         match_time + ringdown_params["OuterBdryRadius"] + 200.0
     )
     logger.debug(f"Ringdown parameters: {pretty_repr(ringdown_params)}")
+
+    # Determine resource allocation
+    if (
+        scheduler_kwargs.get("scheduler") is not None
+        and scheduler_kwargs.get("num_procs") is None
+        and scheduler_kwargs.get("num_nodes") is None
+    ):
+        # By default just run on a fixed number of cores for now. We can
+        # make this smarter later (e.g. scale with the number of elements).
+        scheduler_kwargs["num_procs"] = 180
 
     # Schedule!
     return schedule(
@@ -393,20 +440,20 @@ def start_ringdown(
 @click.option(
     "--number-of-ahc-finds-for-fit",
     type=int,
-    required=True,
+    default=10,
     help="Number of AhC finds that will be used for the fit.",
 )
 @click.option(
     "--match-time",
-    required=True,
     type=float,
+    default=None,
     help="Desired match time (volume data must contain data at this time)",
 )
 @click.option(
     "--settling-timescale",
-    required=True,
     type=float,
-    help="Damping timescale for settle to const",
+    default=10.0,
+    help="Damping timescale for settle to const functions of time",
 )
 @click.option(
     "--zero-coefs-eps",
@@ -419,11 +466,19 @@ def start_ringdown(
     ),
 )
 @click.option(
+    "--lev",
+    type=int,
+    help=(
+        "Resolution levels defined in terms of h and p refinement. For integer"
+        " N, LevN corresponds to refinement level L = 2 and polynomial order P"
+        " = 10 + N. Mutually exclusive with options '-L' and '-P'"
+    ),
+)
+@click.option(
     "--refinement-level",
     "-L",
     type=int,
     help="h-refinement level.",
-    default=2,
     show_default=True,
 )
 @click.option(
@@ -431,7 +486,6 @@ def start_ringdown(
     "-P",
     type=int,
     help="p-refinement level.",
-    default=11,
     show_default=True,
 )
 @click.option(

@@ -32,6 +32,7 @@
 #include "Domain/TagsCharacteristicSpeeds.hpp"
 #include "Evolution/Actions/RunEventsAndDenseTriggers.hpp"
 #include "Evolution/Actions/RunEventsAndTriggers.hpp"
+#include "Evolution/BoundaryCorrection.hpp"
 #include "Evolution/ComputeTags.hpp"
 #include "Evolution/DiscontinuousGalerkin/Actions/ApplyBoundaryCorrections.hpp"
 #include "Evolution/DiscontinuousGalerkin/Actions/ComputeTimeDerivative.hpp"
@@ -104,6 +105,8 @@
 #include "ParallelAlgorithms/Amr/Criteria/Constraints.hpp"
 #include "ParallelAlgorithms/Amr/Criteria/Criterion.hpp"
 #include "ParallelAlgorithms/Amr/Criteria/Factory.hpp"
+#include "ParallelAlgorithms/Amr/Events/ObserveAmrCriteria.hpp"
+#include "ParallelAlgorithms/Amr/Events/ObserveAmrStats.hpp"
 #include "ParallelAlgorithms/Amr/Events/RefineMesh.hpp"
 #include "ParallelAlgorithms/Amr/Projectors/CopyFromCreatorOrLeaveAsIs.hpp"
 #include "ParallelAlgorithms/Amr/Projectors/DefaultInitialize.hpp"
@@ -177,12 +180,11 @@
 #include "PointwiseFunctions/InitialDataUtilities/InitialData.hpp"
 #include "Time/Actions/AdvanceTime.hpp"
 #include "Time/Actions/CleanHistory.hpp"
-#include "Time/Actions/RecordTimeStepperData.hpp"
 #include "Time/Actions/SelfStartActions.hpp"
-#include "Time/Actions/UpdateU.hpp"
 #include "Time/ChangeSlabSize/Action.hpp"
 #include "Time/ChangeSlabSize/Tags.hpp"
 #include "Time/ChangeTimeStepperOrder.hpp"
+#include "Time/RecordTimeStepperData.hpp"
 #include "Time/StepChoosers/Factory.hpp"
 #include "Time/StepChoosers/StepChooser.hpp"
 #include "Time/Tags/StepperErrors.hpp"
@@ -193,6 +195,7 @@
 #include "Time/TimeSteppers/LtsTimeStepper.hpp"
 #include "Time/TimeSteppers/TimeStepper.hpp"
 #include "Time/Triggers/TimeTriggers.hpp"
+#include "Time/UpdateU.hpp"
 #include "Utilities/Algorithm.hpp"
 #include "Utilities/ErrorHandling/Error.hpp"
 #include "Utilities/Functional.hpp"
@@ -501,7 +504,12 @@ struct EvolutionMetavars {
                            control_systems>,
                        Events::time_events<system>,
                        dg::Events::ObserveTimeStepVolume<system>,
-                       amr::Events::RefineMesh>>>,
+                       amr::Events::RefineMesh,
+                       amr::Events::ObserveAmrStats<volume_dim>,
+                       amr::Events::ObserveAmrCriteria<EvolutionMetavars>>>>,
+        tmpl::pair<
+            evolution::BoundaryCorrection,
+            gh::BoundaryCorrections::standard_boundary_corrections<volume_dim>>,
         tmpl::pair<control_system::size::State,
                    control_system::size::States::factory_creatable_states>,
         tmpl::pair<
@@ -561,23 +569,26 @@ struct EvolutionMetavars {
           use_dg_element_collection>,
       tmpl::conditional_t<
           local_time_stepping,
-          tmpl::list<evolution::Actions::RunEventsAndDenseTriggers<tmpl::list<
+          tmpl::list<Actions::MutateApply<RecordTimeStepperData<system>>,
+                     evolution::Actions::RunEventsAndDenseTriggers<tmpl::list<
                          ::domain::CheckFunctionsOfTimeAreReadyPostprocessor<
                              volume_dim>,
                          evolution::dg::ApplyBoundaryCorrections<
-                             local_time_stepping, system, volume_dim, true>>>,
+                             local_time_stepping, EvolutionMetavars, volume_dim,
+                             true>>>,
+                     Actions::MutateApply<UpdateU<system, local_time_stepping>>,
                      evolution::dg::Actions::ApplyLtsBoundaryCorrections<
-                         system, volume_dim, false, use_dg_element_collection>,
+                         volume_dim, false, use_dg_element_collection>,
                      Actions::MutateApply<ChangeTimeStepperOrder<system>>>,
           tmpl::list<
               evolution::dg::Actions::ApplyBoundaryCorrectionsToTimeDerivative<
-                  system, volume_dim, false, use_dg_element_collection>,
-              Actions::RecordTimeStepperData<system>,
+                  volume_dim, false, use_dg_element_collection>,
+              Actions::MutateApply<RecordTimeStepperData<system>>,
               evolution::Actions::RunEventsAndDenseTriggers<tmpl::list<
                   ::domain::CheckFunctionsOfTimeAreReadyPostprocessor<
                       volume_dim>>>,
               control_system::Actions::LimitTimeStep<control_systems>,
-              Actions::UpdateU<system>>>,
+              Actions::MutateApply<UpdateU<system, local_time_stepping>>>>,
       Actions::CleanHistory<system, local_time_stepping>,
       dg::Actions::Filter<
           Filters::Exponential<0>,
@@ -633,6 +644,11 @@ struct EvolutionMetavars {
                                  tmpl::list<dg_registration_list,
                                             Parallel::Actions::TerminatePhase>>,
           Parallel::PhaseActions<
+              Parallel::Phase::WriteCheckpoint,
+              tmpl::list<evolution::Actions::RunEventsAndTriggers<
+                             Triggers::WhenToCheck::AtCheckpoints>,
+                         Parallel::Actions::TerminatePhase>>,
+          Parallel::PhaseActions<
               Parallel::Phase::InitializeTimeStepperHistory,
               SelfStart::self_start_procedure<step_actions, system>>,
           Parallel::PhaseActions<Parallel::Phase::CheckDomain,
@@ -640,11 +656,16 @@ struct EvolutionMetavars {
                                             Parallel::Actions::TerminatePhase>>,
           Parallel::PhaseActions<
               Parallel::Phase::Evolve,
-              tmpl::list<
+              tmpl::flatten<tmpl::list<
                   ::domain::Actions::CheckFunctionsOfTimeAreReady<volume_dim>,
-                  evolution::Actions::RunEventsAndTriggers<local_time_stepping>,
+                  std::conditional_t<local_time_stepping,
+                                     evolution::Actions::RunEventsAndTriggers<
+                                         Triggers::WhenToCheck::AtSteps>,
+                                     tmpl::list<>>,
+                  evolution::Actions::RunEventsAndTriggers<
+                      Triggers::WhenToCheck::AtSlabs>,
                   Actions::ChangeSlabSize, step_actions, Actions::AdvanceTime,
-                  PhaseControl::Actions::ExecutePhaseChange>>,
+                  PhaseControl::Actions::ExecutePhaseChange>>>,
           Parallel::PhaseActions<
               Parallel::Phase::PostFailureCleanup,
               tmpl::list<Actions::RunEventsOnFailure<::Tags::Time>,
@@ -669,7 +690,7 @@ struct EvolutionMetavars {
       const std::vector<std::string>& deadlocked_components) {
     gh::deadlock::run_deadlock_analysis_simple_actions<
         gh_dg_element_array, control_components, interpolation_target_tags,
-        false>(cache, deadlocked_components);
+        control_system_horizon_metavars, false>(cache, deadlocked_components);
   }
 
   struct amr : tt::ConformsTo<::amr::protocols::AmrMetavariables> {

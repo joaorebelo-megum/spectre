@@ -16,6 +16,7 @@
 #include "Domain/Tags.hpp"
 #include "Domain/TagsCharacteristicSpeeds.hpp"
 #include "Evolution/Actions/RunEventsAndDenseTriggers.hpp"
+#include "Evolution/BoundaryCorrection.hpp"
 #include "Evolution/ComputeTags.hpp"
 #include "Evolution/DiscontinuousGalerkin/Actions/ApplyBoundaryCorrections.hpp"
 #include "Evolution/DiscontinuousGalerkin/Actions/ComputeTimeDerivative.hpp"
@@ -26,14 +27,12 @@
 #include "Evolution/Initialization/NonconservativeSystem.hpp"
 #include "Evolution/Initialization/SetVariables.hpp"
 #include "Evolution/Systems/CurvedScalarWave/BoundaryConditions/Factory.hpp"
-#include "Evolution/Systems/CurvedScalarWave/BoundaryCorrections/Factory.hpp"
 #include "Evolution/Systems/CurvedScalarWave/Initialize.hpp"
 #include "Evolution/Systems/CurvedScalarWave/PsiSquared.hpp"
 #include "Evolution/Systems/CurvedScalarWave/System.hpp"
 #include "Evolution/Systems/CurvedScalarWave/Tags.hpp"
 #include "Evolution/Systems/GeneralizedHarmonic/Actions/SetInitialData.hpp"
 #include "Evolution/Systems/GeneralizedHarmonic/BoundaryConditions/Factory.hpp"
-#include "Evolution/Systems/GeneralizedHarmonic/BoundaryCorrections/Factory.hpp"
 #include "Evolution/Systems/GeneralizedHarmonic/Equations.hpp"
 #include "Evolution/Systems/GeneralizedHarmonic/GaugeSourceFunctions/Factory.hpp"
 #include "Evolution/Systems/GeneralizedHarmonic/GaugeSourceFunctions/Gauges.hpp"
@@ -132,10 +131,9 @@
 #include "PointwiseFunctions/ScalarTensor/StressEnergy.hpp"
 #include "Time/Actions/AdvanceTime.hpp"
 #include "Time/Actions/CleanHistory.hpp"
-#include "Time/Actions/RecordTimeStepperData.hpp"
 #include "Time/Actions/SelfStartActions.hpp"
-#include "Time/Actions/UpdateU.hpp"
 #include "Time/ChangeTimeStepperOrder.hpp"
+#include "Time/RecordTimeStepperData.hpp"
 #include "Time/StepChoosers/Factory.hpp"
 #include "Time/StepChoosers/StepChooser.hpp"
 #include "Time/Tags/Time.hpp"
@@ -144,6 +142,7 @@
 #include "Time/TimeSteppers/LtsTimeStepper.hpp"
 #include "Time/TimeSteppers/TimeStepper.hpp"
 #include "Time/Triggers/TimeTriggers.hpp"
+#include "Time/UpdateU.hpp"
 #include "Utilities/ErrorHandling/Error.hpp"
 #include "Utilities/Functional.hpp"
 #include "Utilities/ProtocolHelpers.hpp"
@@ -362,6 +361,9 @@ struct FactoryCreation : tt::ConformsTo<Options::protocols::FactoryCreation> {
                      Events::time_events<system>,
                      dg::Events::ObserveTimeStepVolume<system>>>>,
       tmpl::pair<
+          evolution::BoundaryCorrection,
+          ScalarTensor::BoundaryCorrections::standard_boundary_corrections>,
+      tmpl::pair<
           ScalarTensor::BoundaryConditions::BoundaryCondition,
           ScalarTensor::BoundaryConditions::standard_boundary_conditions>,
       tmpl::pair<gh::gauges::GaugeCondition, gh::gauges::all_gauges>,
@@ -439,21 +441,24 @@ struct ScalarTensorTemplateBase {
           use_dg_element_collection>,
       tmpl::conditional_t<
           local_time_stepping,
-          tmpl::list<evolution::Actions::RunEventsAndDenseTriggers<tmpl::list<
+          tmpl::list<Actions::MutateApply<RecordTimeStepperData<system>>,
+                     evolution::Actions::RunEventsAndDenseTriggers<tmpl::list<
                          ::domain::CheckFunctionsOfTimeAreReadyPostprocessor<
                              volume_dim>,
                          evolution::dg::ApplyBoundaryCorrections<
-                             local_time_stepping, system, volume_dim, true>>>,
+                             local_time_stepping, derived_metavars, volume_dim,
+                             true>>>,
+                     Actions::MutateApply<UpdateU<system, local_time_stepping>>,
                      evolution::dg::Actions::ApplyLtsBoundaryCorrections<
-                         system, volume_dim, false, use_dg_element_collection>,
+                         volume_dim, false, use_dg_element_collection>,
                      Actions::MutateApply<ChangeTimeStepperOrder<system>>>,
           tmpl::list<
               evolution::dg::Actions::ApplyBoundaryCorrectionsToTimeDerivative<
-                  system, volume_dim, false, use_dg_element_collection>,
-              Actions::RecordTimeStepperData<system>,
+                  volume_dim, false, use_dg_element_collection>,
+              Actions::MutateApply<RecordTimeStepperData<system>>,
               evolution::Actions::RunEventsAndDenseTriggers<tmpl::list<>>,
               control_system::Actions::LimitTimeStep<ControlSystems>,
-              Actions::UpdateU<system>>>,
+              Actions::MutateApply<UpdateU<system, local_time_stepping>>>>,
       Actions::CleanHistory<system, local_time_stepping>,
       // We allow for separate filtering of the system variables
       dg::Actions::Filter<Filters::Exponential<0>,

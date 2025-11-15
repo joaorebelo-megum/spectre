@@ -7,6 +7,7 @@
 #include <cstddef>
 #include <limits>
 #include <memory>
+#include <optional>
 #include <unordered_map>
 
 #include "DataStructures/LinkedMessageId.hpp"
@@ -25,6 +26,7 @@
 #include "NumericalAlgorithms/Spectral/Mesh.hpp"
 #include "NumericalAlgorithms/SphericalHarmonics/Strahlkorper.hpp"
 #include "NumericalAlgorithms/SphericalHarmonics/StrahlkorperFunctions.hpp"
+#include "ParallelAlgorithms/ApparentHorizonFinder/ComputeVarsToInterpolateToTarget.hpp"
 #include "ParallelAlgorithms/ApparentHorizonFinder/HorizonAliases.hpp"
 #include "ParallelAlgorithms/ApparentHorizonFinder/InterpolateVolumeVars.hpp"
 #include "ParallelAlgorithms/ApparentHorizonFinder/Storage.hpp"
@@ -132,6 +134,8 @@ void test_interpolate_volume_vars() {
       ylm::cartesian_coords(current_iteration.strahlkorper);
   current_iteration.block_coord_holders = ::block_logical_coordinates(
       domain, surface_coords, time.id, functions_of_time);
+  const size_t expected_num_points =
+      current_iteration.block_coord_holders->size();
 
   const gr::Solutions::KerrSchild solution(mass, spin, {0.0, 0.0, 0.0});
   const auto solution_vars = solution.variables(
@@ -142,52 +146,57 @@ void test_interpolate_volume_vars() {
                      ah::Storage::VolumeVariables<Frame::Inertial>>
       all_volume_variables{};
 
-  // Check that if there aren't any volume variables, that nothing happens
-  ah::interpolate_volume_data(make_not_null(&current_iteration),
-                              make_not_null(&all_volume_variables), time,
-                              domain, functions_of_time);
-  CHECK(current_iteration.interpolation_is_done_for_these_elements.empty());
-  CHECK(current_iteration.indicies_interpolated_to_thus_far.empty());
-  CHECK(current_iteration.interpolated_vars.number_of_grid_points() == 0_st);
-
   size_t num_previous_indices_interpolated_to = 0;
   for (const auto& element_id : element_ids) {
     const Mesh mesh{domain_creator.initial_extents()[element_id.block_id()],
                     Spectral::Basis::Legendre,
                     Spectral::Quadrature::GaussLobatto};
 
-    all_volume_variables[element_id].source_vars = compute_source_vars(
+    const auto source_vars = compute_source_vars(
         solution, time, element_id, blocks[element_id.block_id()], mesh);
-    all_volume_variables[element_id].mesh = mesh;
 
-    ah::interpolate_volume_data(make_not_null(&current_iteration),
-                                make_not_null(&all_volume_variables), time,
-                                domain, functions_of_time);
+    auto& volume_vars = all_volume_variables[element_id];
+    volume_vars.mesh = mesh;
+    ah::compute_vars_to_interpolate_to_target(
+        make_not_null(&volume_vars.vars_to_interpolate_to_target),
+        get<::gr::Tags::SpacetimeMetric<DataVector, 3>>(source_vars),
+        get<::gh::Tags::Pi<DataVector, 3>>(source_vars),
+        get<::gh::Tags::Phi<DataVector, 3>>(source_vars),
+        get<Tags::deriv<::gh::Tags::Phi<DataVector, 3>, tmpl::size_t<3>,
+                        Frame::Inertial>>(source_vars),
+        time, domain, mesh, element_id, functions_of_time);
+
+    const bool interpolated_any_points = ah::interpolate_volume_data(
+        make_not_null(&current_iteration), volume_vars, element_id);
+
+    CHECK(current_iteration.intersecting_element_ids.contains(element_id) ==
+          interpolated_any_points);
 
     // Check that we finished interpolation and that the points we interpolated
     // to aren't the default fill value
-    CHECK(current_iteration.interpolation_is_done_for_these_elements.contains(
-        element_id));
     // We could in theory figure out which points are in which element for a
     // given l_max, but that's quite tedious and we don't need such a stringent
     // test
-    CHECK_FALSE(current_iteration.indicies_interpolated_to_thus_far.size() ==
-                num_previous_indices_interpolated_to);
-    num_previous_indices_interpolated_to =
-        current_iteration.indicies_interpolated_to_thus_far.size();
+    const auto num_indices_interpolated_to = static_cast<size_t>(
+        alg::count_if(current_iteration.indices_interpolated_to_thus_far,
+                      [](const bool filled) { return filled; }));
+    CHECK(num_indices_interpolated_to > num_previous_indices_interpolated_to);
+    num_previous_indices_interpolated_to = num_indices_interpolated_to;
     tmpl::for_each<ah::vars_to_interpolate_to_target<3, Frame::Inertial>>(
         [&]<typename Tag>(tmpl::type_<Tag>) {
           auto& interpolated_var =
               get<Tag>(current_iteration.interpolated_vars);
           for (size_t j = 0; j < interpolated_var.size(); j++) {
-            for (const size_t index :
-                 current_iteration.indicies_interpolated_to_thus_far) {
-              CHECK(interpolated_var[j][index] !=
-                    std::numeric_limits<double>::max());
+            for (size_t index = 0; index < expected_num_points; index++) {
+              if (current_iteration.indices_interpolated_to_thus_far[index]) {
+                CHECK(interpolated_var[j][index] !=
+                      std::numeric_limits<double>::max());
+              }
             }
           }
         });
   }
+  CHECK(current_iteration.interpolation_is_complete());
 
   const auto check_no_max = [&]() {
     tmpl::for_each<ah::vars_to_interpolate_to_target<3, Frame::Inertial>>(
@@ -203,25 +212,6 @@ void test_interpolate_volume_vars() {
   };
 
   // Check all points have been interpolated to
-  check_no_max();
-
-  // Test sending volume data again that it doesn't do anything
-  const auto& element_id = element_ids[0];
-  const Mesh mesh{domain_creator.initial_extents()[element_id.block_id()],
-                  Spectral::Basis::Legendre,
-                  Spectral::Quadrature::GaussLobatto};
-
-  ah::interpolate_volume_data(make_not_null(&current_iteration),
-                              make_not_null(&all_volume_variables), time,
-                              domain, functions_of_time);
-
-  // Check interpolation is still done
-  CHECK(current_iteration.interpolation_is_done_for_these_elements.contains(
-      element_id));
-  // This shouldn't have changed
-  CHECK(current_iteration.indicies_interpolated_to_thus_far.size() ==
-        num_previous_indices_interpolated_to);
-  // Again check that all points are interpolated to
   check_no_max();
 }
 

@@ -16,6 +16,7 @@
 #include "Domain/Tags.hpp"
 #include "Domain/TagsCharacteristicSpeeds.hpp"
 #include "Evolution/Actions/RunEventsAndDenseTriggers.hpp"
+#include "Evolution/BoundaryCorrection.hpp"
 #include "Evolution/ComputeTags.hpp"
 #include "Evolution/DiscontinuousGalerkin/Actions/ApplyBoundaryCorrections.hpp"
 #include "Evolution/DiscontinuousGalerkin/Actions/ComputeTimeDerivative.hpp"
@@ -71,9 +72,8 @@
 #include "ParallelAlgorithms/Amr/Actions/SendAmrDiagnostics.hpp"
 #include "ParallelAlgorithms/Amr/Criteria/Constraints.hpp"
 #include "ParallelAlgorithms/Amr/Criteria/Criterion.hpp"
-#include "ParallelAlgorithms/Amr/Criteria/DriveToTarget.hpp"
+#include "ParallelAlgorithms/Amr/Criteria/Factory.hpp"
 #include "ParallelAlgorithms/Amr/Criteria/Tags/Criteria.hpp"
-#include "ParallelAlgorithms/Amr/Criteria/TruncationError.hpp"
 #include "ParallelAlgorithms/Amr/Criteria/Type.hpp"
 #include "ParallelAlgorithms/Amr/Projectors/CopyFromCreatorOrLeaveAsIs.hpp"
 #include "ParallelAlgorithms/Amr/Projectors/DefaultInitialize.hpp"
@@ -132,9 +132,8 @@
 #include "PointwiseFunctions/MathFunctions/MathFunction.hpp"
 #include "Time/Actions/AdvanceTime.hpp"
 #include "Time/Actions/CleanHistory.hpp"
-#include "Time/Actions/RecordTimeStepperData.hpp"
-#include "Time/Actions/UpdateU.hpp"
 #include "Time/ChangeTimeStepperOrder.hpp"
+#include "Time/RecordTimeStepperData.hpp"
 #include "Time/StepChoosers/Factory.hpp"
 #include "Time/StepChoosers/StepChooser.hpp"
 #include "Time/Tags/Time.hpp"
@@ -143,6 +142,7 @@
 #include "Time/TimeSteppers/LtsTimeStepper.hpp"
 #include "Time/TimeSteppers/TimeStepper.hpp"
 #include "Time/Triggers/TimeTriggers.hpp"
+#include "Time/UpdateU.hpp"
 #include "Utilities/ErrorHandling/Error.hpp"
 #include "Utilities/Functional.hpp"
 #include "Utilities/ProtocolHelpers.hpp"
@@ -282,14 +282,12 @@ struct FactoryCreation : tt::ConformsTo<Options::protocols::FactoryCreation> {
   using factory_classes = tmpl::map<
       tmpl::pair<
           amr::Criterion,
-          tmpl::list<
-              amr::Criteria::DriveToTarget<volume_dim, amr::Criteria::Type::h>,
-              amr::Criteria::DriveToTarget<volume_dim, amr::Criteria::Type::p>,
+          tmpl::push_back<
+              amr::Criteria::standard_criteria<
+                  volume_dim, typename system::variables_tag::tags_list>,
               amr::Criteria::Constraints<
                   volume_dim, tmpl::list<gh::Tags::ThreeIndexConstraintCompute<
-                                  volume_dim, Frame::Inertial>>>,
-              amr::Criteria::TruncationError<
-                  volume_dim, typename system::variables_tag::tags_list>>>,
+                                  volume_dim, Frame::Inertial>>>>>,
       tmpl::pair<DenseTrigger, DenseTriggers::standard_dense_triggers>,
       tmpl::pair<DomainCreator<volume_dim>, domain_creators<volume_dim>>,
       tmpl::pair<
@@ -299,6 +297,9 @@ struct FactoryCreation : tt::ConformsTo<Options::protocols::FactoryCreation> {
               typename detail::ObserverTags<volume_dim>::field_observations,
               Events::time_events<system>,
               dg::Events::ObserveTimeStepVolume<system>>>>,
+      tmpl::pair<
+          evolution::BoundaryCorrection,
+          gh::BoundaryCorrections::standard_boundary_corrections<volume_dim>>,
       tmpl::pair<
           gh::BoundaryConditions::BoundaryCondition<volume_dim>,
           gh::BoundaryConditions::standard_boundary_conditions<volume_dim>>,
@@ -379,28 +380,31 @@ struct GeneralizedHarmonicTemplateBase {
                  Parallel::Phase::Evolve,
                  Parallel::Phase::Exit};
 
-  template <typename ControlSystems>
+  template <typename DerivedMetavars, typename ControlSystems>
   using step_actions = tmpl::list<
       evolution::dg::Actions::ComputeTimeDerivative<
           volume_dim, system, AllStepChoosers, local_time_stepping,
           use_dg_element_collection>,
       tmpl::conditional_t<
           local_time_stepping,
-          tmpl::list<evolution::Actions::RunEventsAndDenseTriggers<tmpl::list<
-                         ::domain::CheckFunctionsOfTimeAreReadyPostprocessor<
-                             volume_dim>,
-                         evolution::dg::ApplyBoundaryCorrections<
-                             local_time_stepping, system, volume_dim, true>>>,
-                     evolution::dg::Actions::ApplyLtsBoundaryCorrections<
-                         system, volume_dim, false, use_dg_element_collection>,
-                     Actions::MutateApply<ChangeTimeStepperOrder<system>>>,
+          tmpl::list<
+              Actions::MutateApply<RecordTimeStepperData<system>>,
+              evolution::Actions::RunEventsAndDenseTriggers<tmpl::list<
+                  ::domain::CheckFunctionsOfTimeAreReadyPostprocessor<
+                      volume_dim>,
+                  evolution::dg::ApplyBoundaryCorrections<
+                      local_time_stepping, DerivedMetavars, volume_dim, true>>>,
+              Actions::MutateApply<UpdateU<system, local_time_stepping>>,
+              evolution::dg::Actions::ApplyLtsBoundaryCorrections<
+                  volume_dim, false, use_dg_element_collection>,
+              Actions::MutateApply<ChangeTimeStepperOrder<system>>>,
           tmpl::list<
               evolution::dg::Actions::ApplyBoundaryCorrectionsToTimeDerivative<
-                  system, volume_dim, false, use_dg_element_collection>,
-              Actions::RecordTimeStepperData<system>,
+                  volume_dim, false, use_dg_element_collection>,
+              Actions::MutateApply<RecordTimeStepperData<system>>,
               evolution::Actions::RunEventsAndDenseTriggers<tmpl::list<>>,
               control_system::Actions::LimitTimeStep<ControlSystems>,
-              Actions::UpdateU<system>>>,
+              Actions::MutateApply<UpdateU<system, local_time_stepping>>>>,
       Actions::CleanHistory<system, local_time_stepping>,
       dg::Actions::Filter<
           Filters::Exponential<0>,

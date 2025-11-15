@@ -5,6 +5,7 @@ Executable: EvolveGhBinaryBlackHole
 Testing:
   Check: parse
   Priority: High
+  Timeout: 10
 
 ---
 
@@ -188,7 +189,7 @@ PhaseChangeAndTriggers:
 
 SpatialDiscretization:
   BoundaryCorrection:
-    UpwindPenalty:
+    AveragedUpwindPenalty:
   DiscontinuousGalerkin:
     Formulation: StrongInertial
     Quadrature: GaussLobatto
@@ -200,6 +201,8 @@ Filtering:
     Enable: False
     BlocksToFilter: All
 
+
+EventsAndTriggersAtCheckpoints:
 
 EventsAndTriggersAtSlabs:
   - Trigger:
@@ -297,6 +300,7 @@ Interpolator:
   Verbosity: Silent
 
 ApparentHorizons:
+  LMax: 20
   ObservationAhA: &AhA
     Criteria:
     InitialGuess:
@@ -365,6 +369,7 @@ Cce:
 ControlSystems:
   WriteDataToDisk: true
   MeasurementsPerUpdate: 4
+  DelayUpdate: true
   Verbosity: Silent
   Expansion:
     Averager:

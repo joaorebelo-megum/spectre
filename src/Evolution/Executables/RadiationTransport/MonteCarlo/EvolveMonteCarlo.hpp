@@ -83,9 +83,7 @@
 #include "PointwiseFunctions/InitialDataUtilities/Tags/InitialData.hpp"
 #include "Time/Actions/AdvanceTime.hpp"
 #include "Time/Actions/CleanHistory.hpp"
-#include "Time/Actions/RecordTimeStepperData.hpp"
 #include "Time/Actions/SelfStartActions.hpp"
-#include "Time/Actions/UpdateU.hpp"
 #include "Time/ChangeSlabSize/Action.hpp"
 #include "Time/StepChoosers/Factory.hpp"
 #include "Time/StepChoosers/StepChooser.hpp"
@@ -231,10 +229,16 @@ struct EvolutionMetavars {
                                  tmpl::list<dg_registration_list,
                                             Parallel::Actions::TerminatePhase>>,
           Parallel::PhaseActions<
+              Parallel::Phase::WriteCheckpoint,
+              tmpl::list<evolution::Actions::RunEventsAndTriggers<
+                             Triggers::WhenToCheck::AtCheckpoints>,
+                         Parallel::Actions::TerminatePhase>>,
+          Parallel::PhaseActions<
               Parallel::Phase::Evolve,
               tmpl::list<
                   Actions::AdvanceTime,
-                  evolution::Actions::RunEventsAndTriggers<false>,
+                  evolution::Actions::RunEventsAndTriggers<
+                      Triggers::WhenToCheck::AtSlabs>,
                   // Monte-Carlo is only triggered at the end of a full time
                   // step
                   Particles::MonteCarlo::Actions::TriggerMonteCarloEvolution,

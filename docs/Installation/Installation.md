@@ -194,7 +194,7 @@ use a container or follow the \ref quick_start_install.
 
 #### Required:
 
-* [GCC](https://gcc.gnu.org/) 9.1 or later,
+* [GCC](https://gcc.gnu.org/) 10.0 or later,
 [Clang](https://clang.llvm.org/) 13.0 or later (see
 [here](https://apt.llvm.org/) for how to get newer versions of clang through
 apt), or AppleClang 13.0.0 or later
@@ -270,6 +270,8 @@ The following dependencies will be fetched automatically if you set
   matplotlib
 * [xsimd](https://github.com/xtensor-stack/xsimd) 11.0.1 or newer - for manual
   vectorization
+* [autodiff](https://github.com/autodiff/autodiff/) commit cc2aa5726fdbb258d097f87b97da3d1022f8394e
+  or newer - for automatic differentiation
 * [libbacktrace](https://github.com/ianlancetaylor/libbacktrace) - to show
   source files and line numbers in backtraces of errors and asserts. Available
   by default on many systems, so you may not have to install it at all. The

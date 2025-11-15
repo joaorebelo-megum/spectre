@@ -35,6 +35,9 @@
 #include "Parallel/PhaseControl/ExecutePhaseChange.hpp"
 #include "Parallel/Protocols/RegistrationMetavariables.hpp"
 #include "ParallelAlgorithms/Actions/FunctionsOfTimeAreReady.hpp"
+#include "ParallelAlgorithms/Amr/Events/ObserveAmrCriteria.hpp"
+#include "ParallelAlgorithms/Amr/Events/ObserveAmrStats.hpp"
+#include "ParallelAlgorithms/Amr/Events/RefineMesh.hpp"
 #include "ParallelAlgorithms/Amr/Projectors/CopyFromCreatorOrLeaveAsIs.hpp"
 #include "ParallelAlgorithms/ApparentHorizonFinder/Callbacks/ErrorOnFailedApparentHorizon.hpp"
 #include "ParallelAlgorithms/ApparentHorizonFinder/Callbacks/FailedHorizonFind.hpp"
@@ -195,16 +198,17 @@ struct EvolutionMetavars : public GeneralizedHarmonicTemplateBase<3, UseLts> {
             tmpl::pair<LtsTimeStepper,
                        TimeSteppers::monotonic_lts_time_steppers>>,
         tmpl::pair<ah::Criterion, ah::Criteria::standard_criteria>,
-        tmpl::pair<
-            Event,
-            tmpl::flatten<tmpl::list<
-                ah::Events::FindApparentHorizon<ApparentHorizon>,
-                control_system::metafunctions::control_system_events<
-                    control_systems>,
-                intrp::Events::InterpolateWithoutInterpComponent<
-                    3, BondiSachs, source_vars_no_deriv>,
-                intrp::Events::InterpolateWithoutInterpComponent<
-                    3, ExcisionBoundary, ::ah::source_vars<volume_dim>>>>>,
+        tmpl::pair<Event,
+                   tmpl::flatten<tmpl::list<
+                       ah::Events::FindApparentHorizon<ApparentHorizon>,
+                       control_system::metafunctions::control_system_events<
+                           control_systems>,
+                       intrp::Events::InterpolateWithoutInterpComponent<
+                           3, BondiSachs, source_vars_no_deriv>,
+                       intrp::Events::InterpolateWithoutInterpComponent<
+                           3, ExcisionBoundary, ::ah::source_vars<volume_dim>>,
+                       amr::Events::RefineMesh,
+                       amr::Events::ObserveAmrStats<volume_dim>>>>,
         tmpl::pair<DenseTrigger,
                    control_system::control_system_triggers<control_systems>>,
         tmpl::pair<control_system::size::State,
@@ -220,7 +224,9 @@ struct EvolutionMetavars : public GeneralizedHarmonicTemplateBase<3, UseLts> {
 
   using dg_registration_list = typename gh_base::dg_registration_list;
 
-  using step_actions = typename gh_base::template step_actions<control_systems>;
+  using step_actions =
+      typename gh_base::template step_actions<EvolutionMetavars,
+                                              control_systems>;
 
   using initialization_actions = tmpl::push_back<
       tmpl::pop_back<typename gh_base::template initialization_actions<
@@ -257,16 +263,26 @@ struct EvolutionMetavars : public GeneralizedHarmonicTemplateBase<3, UseLts> {
           Parallel::PhaseActions<Parallel::Phase::Restart,
                                  tmpl::list<dg_registration_list,
                                             Parallel::Actions::TerminatePhase>>,
+          Parallel::PhaseActions<
+              Parallel::Phase::WriteCheckpoint,
+              tmpl::list<evolution::Actions::RunEventsAndTriggers<
+                             Triggers::WhenToCheck::AtCheckpoints>,
+                         Parallel::Actions::TerminatePhase>>,
           Parallel::PhaseActions<Parallel::Phase::CheckDomain,
                                  tmpl::list<::amr::Actions::SendAmrDiagnostics,
                                             Parallel::Actions::TerminatePhase>>,
           Parallel::PhaseActions<
               Parallel::Phase::Evolve,
-              tmpl::list<
+              tmpl::flatten<tmpl::list<
                   ::domain::Actions::CheckFunctionsOfTimeAreReady<volume_dim>,
-                  evolution::Actions::RunEventsAndTriggers<local_time_stepping>,
+                  std::conditional_t<local_time_stepping,
+                                     evolution::Actions::RunEventsAndTriggers<
+                                         Triggers::WhenToCheck::AtSteps>,
+                                     tmpl::list<>>,
+                  evolution::Actions::RunEventsAndTriggers<
+                      Triggers::WhenToCheck::AtSlabs>,
                   Actions::ChangeSlabSize, step_actions, Actions::AdvanceTime,
-                  PhaseControl::Actions::ExecutePhaseChange>>,
+                  PhaseControl::Actions::ExecutePhaseChange>>>,
           Parallel::PhaseActions<
               Parallel::Phase::PostFailureCleanup,
               tmpl::list<Actions::RunEventsOnFailure<::Tags::Time>,
@@ -324,7 +340,7 @@ struct EvolutionMetavars : public GeneralizedHarmonicTemplateBase<3, UseLts> {
       const std::vector<std::string>& deadlocked_components) {
     gh::deadlock::run_deadlock_analysis_simple_actions<
         gh_dg_element_array, control_components, interpolation_target_tags,
-        false>(cache, deadlocked_components);
+        tmpl::list<ApparentHorizon>, false>(cache, deadlocked_components);
   }
 
   using component_list = tmpl::flatten<tmpl::list<

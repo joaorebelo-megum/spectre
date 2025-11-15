@@ -8,6 +8,7 @@ Testing:
 ExpectedOutput:
   - ScalarWavePlaneWave1DObserveExampleVolume.h5
   - ScalarWavePlaneWave1DObserveExampleReductions.h5
+  - ScalarWavePlaneWave1DObserveExampleReductions0.h5
 
 ---
 
@@ -90,8 +91,8 @@ SpatialDiscretization:
 # If filtering is enabled in the executable the filter can be controlled using:
 # Filtering:
 #   ExpFilter0:
-#     Alpha: 12
-#     HalfPower: 32
+#     Alpha: 36
+#     HalfPower: 128
 #     Enable: false
 #     BlocksToFilter: All
 
@@ -115,6 +116,8 @@ EventsAndDenseTriggers:
               NormType: L2Norm
               Components: Sum
 
+EventsAndTriggersAtCheckpoints:
+
 EventsAndTriggersAtSlabs:
   - Trigger:
       Slabs:
@@ -123,6 +126,9 @@ EventsAndTriggersAtSlabs:
           Offset: 0
     Events:
       - RefineMesh
+      - ObserveAmrStats:
+          PrintToTerminal: True
+          ObservePerCore: True
   - Trigger:
       Slabs:
         Specified:

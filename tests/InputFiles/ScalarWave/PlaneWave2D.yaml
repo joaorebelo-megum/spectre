@@ -81,10 +81,12 @@ SpatialDiscretization:
 # Filtering is being tested by the 2D executable (see EvolveScalarWave.hpp)
 Filtering:
   ExpFilter0:
-    Alpha: 12
-    HalfPower: 32
+    Alpha: 36
+    HalfPower: 128
     Enable: true
     BlocksToFilter: All
+
+EventsAndTriggersAtCheckpoints:
 
 EventsAndTriggersAtSlabs:
   # Added on restart by option overlay

@@ -14,6 +14,7 @@
 #include "Domain/Tags.hpp"
 #include "Evolution/Actions/RunEventsAndDenseTriggers.hpp"
 #include "Evolution/Actions/RunEventsAndTriggers.hpp"
+#include "Evolution/BoundaryCorrection.hpp"
 #include "Evolution/ComputeTags.hpp"
 #include "Evolution/DiscontinuousGalerkin/Actions/ApplyBoundaryCorrections.hpp"
 #include "Evolution/DiscontinuousGalerkin/Actions/ComputeTimeDerivative.hpp"
@@ -24,6 +25,7 @@
 #include "Evolution/Initialization/Evolution.hpp"
 #include "Evolution/Initialization/NonconservativeSystem.hpp"
 #include "Evolution/Initialization/SetVariables.hpp"
+#include "Evolution/Systems/CurvedScalarWave/Actions/SetInitialData.hpp"
 #include "Evolution/Systems/CurvedScalarWave/BackgroundSpacetime.hpp"
 #include "Evolution/Systems/CurvedScalarWave/BoundaryConditions/Factory.hpp"
 #include "Evolution/Systems/CurvedScalarWave/BoundaryCorrections/Factory.hpp"
@@ -34,6 +36,8 @@
 #include "Evolution/Systems/CurvedScalarWave/System.hpp"
 #include "Evolution/Systems/CurvedScalarWave/Tags.hpp"
 #include "Evolution/Tags/Filter.hpp"
+#include "IO/Importers/Actions/RegisterWithElementDataReader.hpp"
+#include "IO/Importers/ElementDataReader.hpp"
 #include "IO/Observer/Actions/RegisterEvents.hpp"
 #include "IO/Observer/Helpers.hpp"
 #include "IO/Observer/ObserverComponent.hpp"
@@ -82,6 +86,7 @@
 #include "PointwiseFunctions/AnalyticSolutions/GeneralRelativity/KerrSchild.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/GeneralRelativity/Minkowski.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Tags.hpp"
+#include "PointwiseFunctions/AnalyticSolutions/WaveEquation/Factory.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/WaveEquation/PlaneWave.hpp"
 #include "PointwiseFunctions/GeneralRelativity/Christoffel.hpp"
 #include "PointwiseFunctions/GeneralRelativity/GeneralizedHarmonic/ExtrinsicCurvature.hpp"
@@ -93,11 +98,10 @@
 #include "PointwiseFunctions/MathFunctions/MathFunction.hpp"
 #include "Time/Actions/AdvanceTime.hpp"
 #include "Time/Actions/CleanHistory.hpp"
-#include "Time/Actions/RecordTimeStepperData.hpp"
 #include "Time/Actions/SelfStartActions.hpp"
-#include "Time/Actions/UpdateU.hpp"
 #include "Time/ChangeSlabSize/Action.hpp"
 #include "Time/ChangeTimeStepperOrder.hpp"
+#include "Time/RecordTimeStepperData.hpp"
 #include "Time/StepChoosers/ByBlock.hpp"
 #include "Time/StepChoosers/Factory.hpp"
 #include "Time/StepChoosers/StepChooser.hpp"
@@ -107,6 +111,7 @@
 #include "Time/TimeSteppers/LtsTimeStepper.hpp"
 #include "Time/TimeSteppers/TimeStepper.hpp"
 #include "Time/Triggers/TimeTriggers.hpp"
+#include "Time/UpdateU.hpp"
 #include "Utilities/ErrorHandling/Error.hpp"
 #include "Utilities/ProtocolHelpers.hpp"
 #include "Utilities/TMPL.hpp"
@@ -124,15 +129,11 @@ class er;
 }  // namespace PUP
 /// \endcond
 
-template <size_t Dim, typename BackgroundSpacetime, typename InitialData>
+template <size_t Dim, typename BackgroundSpacetime>
 struct EvolutionMetavars {
   static constexpr size_t volume_dim = Dim;
   using background_spacetime = BackgroundSpacetime;
-  static_assert(
-      is_analytic_data_v<InitialData> xor is_analytic_solution_v<InitialData>,
-      "initial_data must be either an analytic_data or an analytic_solution");
 
-  using solutions_and_data = tmpl::list<InitialData>;
   using system = CurvedScalarWave::System<Dim>;
   using temporal_id = Tags::TimeStepId;
   using TimeStepperBase = LtsTimeStepper;
@@ -188,6 +189,13 @@ struct EvolutionMetavars {
     using interpolating_component = typename metavariables::dg_element_array;
   };
 
+  using initial_data_list = tmpl::flatten<tmpl::list<
+      ScalarWave::Solutions::all_solutions<Dim>,
+      tmpl::conditional_t<
+          Dim == 3,
+          tmpl::list<CurvedScalarWave::AnalyticData::PureSphericalHarmonic,
+                     CurvedScalarWave::NumericInitialData>,
+          tmpl::list<>>>>;
   using interpolation_target_tags = tmpl::list<SphericalSurface>;
   using interpolator_source_vars =
       tmpl::list<gr::Tags::SpatialMetric<DataVector, volume_dim>,
@@ -214,7 +222,10 @@ struct EvolutionMetavars {
                     tmpl::list<>>,
                 Events::time_events<system>,
                 dg::Events::ObserveTimeStepVolume<system>>>>,
-        tmpl::pair<evolution::initial_data::InitialData, solutions_and_data>,
+        tmpl::pair<evolution::BoundaryCorrection,
+                   CurvedScalarWave::BoundaryCorrections::
+                       standard_boundary_corrections<volume_dim>>,
+        tmpl::pair<evolution::initial_data::InitialData, initial_data_list>,
         tmpl::pair<LtsTimeStepper, TimeSteppers::lts_time_steppers>,
         tmpl::pair<MathFunction<1, Frame::Inertial>,
                    MathFunctions::all_math_functions<1, Frame::Inertial>>,
@@ -247,18 +258,21 @@ struct EvolutionMetavars {
           use_dg_element_collection>,
       tmpl::conditional_t<
           local_time_stepping,
-          tmpl::list<evolution::Actions::RunEventsAndDenseTriggers<
+          tmpl::list<Actions::MutateApply<RecordTimeStepperData<system>>,
+                     evolution::Actions::RunEventsAndDenseTriggers<
                          tmpl::list<evolution::dg::ApplyBoundaryCorrections<
-                             local_time_stepping, system, volume_dim, true>>>,
+                             local_time_stepping, EvolutionMetavars, volume_dim,
+                             true>>>,
+                     Actions::MutateApply<UpdateU<system, local_time_stepping>>,
                      evolution::dg::Actions::ApplyLtsBoundaryCorrections<
-                         system, volume_dim, false, use_dg_element_collection>,
+                         volume_dim, false, use_dg_element_collection>,
                      Actions::MutateApply<ChangeTimeStepperOrder<system>>>,
           tmpl::list<
               evolution::dg::Actions::ApplyBoundaryCorrectionsToTimeDerivative<
-                  system, volume_dim, false, use_dg_element_collection>,
-              Actions::RecordTimeStepperData<system>,
+                  volume_dim, false, use_dg_element_collection>,
+              Actions::MutateApply<RecordTimeStepperData<system>>,
               evolution::Actions::RunEventsAndDenseTriggers<tmpl::list<>>,
-              Actions::UpdateU<system>>>,
+              Actions::MutateApply<UpdateU<system, local_time_stepping>>>>,
       Actions::CleanHistory<system, local_time_stepping>,
       tmpl::conditional_t<
           use_filtering,
@@ -284,9 +298,7 @@ struct EvolutionMetavars {
       CurvedScalarWave::Actions::CalculateGrVars<system, false>,
       Initialization::Actions::AddSimpleTags<
           CurvedScalarWave::Initialization::InitializeConstraintDampingGammas<
-              volume_dim>,
-          CurvedScalarWave::Initialization::InitializeEvolvedVariables<
-              volume_dim, solutions_and_data>>,
+              volume_dim>>,
       Initialization::Actions::AddComputeTags<
           tmpl::flatten<tmpl::list<StepChoosers::step_chooser_compute_tags<
               EvolutionMetavars, local_time_stepping>>>>,
@@ -302,6 +314,15 @@ struct EvolutionMetavars {
           Parallel::PhaseActions<Parallel::Phase::Initialization,
                                  initialization_actions>,
           Parallel::PhaseActions<
+              Parallel::Phase::RegisterWithElementDataReader,
+              tmpl::list<importers::Actions::RegisterWithElementDataReader,
+                         Parallel::Actions::TerminatePhase>>,
+          Parallel::PhaseActions<
+              Parallel::Phase::ImportInitialData,
+              tmpl::list<CurvedScalarWave::Actions::SetInitialData,
+                         CurvedScalarWave::Actions::ReceiveNumericInitialData,
+                         Parallel::Actions::TerminatePhase>>,
+          Parallel::PhaseActions<
               Parallel::Phase::InitializeTimeStepperHistory,
               SelfStart::self_start_procedure<step_actions, system>>,
           Parallel::PhaseActions<Parallel::Phase::Register,
@@ -311,11 +332,21 @@ struct EvolutionMetavars {
                                  tmpl::list<dg_registration_list,
                                             Parallel::Actions::TerminatePhase>>,
           Parallel::PhaseActions<
+              Parallel::Phase::WriteCheckpoint,
+              tmpl::list<evolution::Actions::RunEventsAndTriggers<
+                             Triggers::WhenToCheck::AtCheckpoints>,
+                         Parallel::Actions::TerminatePhase>>,
+          Parallel::PhaseActions<
               Parallel::Phase::Evolve,
-              tmpl::list<
-                  evolution::Actions::RunEventsAndTriggers<local_time_stepping>,
+              tmpl::flatten<tmpl::list<
+                  std::conditional_t<local_time_stepping,
+                                     evolution::Actions::RunEventsAndTriggers<
+                                         Triggers::WhenToCheck::AtSteps>,
+                                     tmpl::list<>>,
+                  evolution::Actions::RunEventsAndTriggers<
+                      Triggers::WhenToCheck::AtSlabs>,
                   Actions::ChangeSlabSize, step_actions, Actions::AdvanceTime,
-                  PhaseControl::Actions::ExecutePhaseChange>>>>;
+                  PhaseControl::Actions::ExecutePhaseChange>>>>>;
 
   struct registration
       : tt::ConformsTo<Parallel::protocols::RegistrationMetavariables> {
@@ -326,6 +357,7 @@ struct EvolutionMetavars {
   using component_list = tmpl::flatten<
       tmpl::list<observers::Observer<EvolutionMetavars>,
                  observers::ObserverWriter<EvolutionMetavars>,
+                 importers::ElementDataReader<EvolutionMetavars>,
                  tmpl::conditional_t<interpolate,
                                      intrp::InterpolationTarget<
                                          EvolutionMetavars, SphericalSurface>,
@@ -336,10 +368,14 @@ struct EvolutionMetavars {
       "Evolve a scalar wave in Dim spatial dimension on a curved background "
       "spacetime."};
 
-  static constexpr std::array<Parallel::Phase, 5> default_phase_order{
-      {Parallel::Phase::Initialization,
-       Parallel::Phase::InitializeTimeStepperHistory, Parallel::Phase::Register,
-       Parallel::Phase::Evolve, Parallel::Phase::Exit}};
+  static constexpr auto default_phase_order =
+      std::array{Parallel::Phase::Initialization,
+                 Parallel::Phase::RegisterWithElementDataReader,
+                 Parallel::Phase::ImportInitialData,
+                 Parallel::Phase::InitializeTimeStepperHistory,
+                 Parallel::Phase::Register,
+                 Parallel::Phase::Evolve,
+                 Parallel::Phase::Exit};
 
   // NOLINTNEXTLINE(google-runtime-references)
   void pup(PUP::er& /*p*/) {}

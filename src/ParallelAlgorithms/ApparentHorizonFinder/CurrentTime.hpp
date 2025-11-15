@@ -101,6 +101,7 @@ bool check_if_current_time_is_ready(
 
             // Success: the current time is ok.
             // Failure: the current time is not ok.
+            using horizon_frame = typename HorizonMetavars::frame;
             return current_time.id <= min_expiration_time
                        ? std::unique_ptr<Parallel::Callback>{}
                        : std::unique_ptr<Parallel::Callback>(
@@ -108,11 +109,15 @@ bool check_if_current_time_is_ready(
                                  FindApparentHorizon<HorizonMetavars>,
                                  decltype(this_proxy), LinkedMessageId<double>,
                                  ElementId<3>, Mesh<3>,
-                                 Variables<ah::source_vars<3>>,
+                                 Variables<ah::vars_to_interpolate_to_target<
+                                     3, horizon_frame>>,
                                  std::optional<std::string>, bool>(
                                  this_proxy, incoming_time, incoming_element_id,
-                                 incoming_mesh, Variables<ah::source_vars<3>>{},
-                                 dependency, true));
+                                 incoming_mesh,
+                                 Variables<ah::vars_to_interpolate_to_target<
+                                     3, horizon_frame>>{},
+                                 dependency,
+                                 /* vars_have_already_been_received */ true));
           });
     }  // if (domain.is_time_dependent())
   } else {

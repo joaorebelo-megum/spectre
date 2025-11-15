@@ -12,6 +12,7 @@
 #include "Domain/Tags.hpp"
 #include "Evolution/Actions/RunEventsAndDenseTriggers.hpp"
 #include "Evolution/Actions/RunEventsAndTriggers.hpp"
+#include "Evolution/BoundaryCorrection.hpp"
 #include "Evolution/ComputeTags.hpp"
 #include "Evolution/DgSubcell/Actions/Initialize.hpp"
 #include "Evolution/DgSubcell/Actions/Labels.hpp"
@@ -90,10 +91,9 @@
 #include "PointwiseFunctions/AnalyticSolutions/Tags.hpp"
 #include "Time/Actions/AdvanceTime.hpp"
 #include "Time/Actions/CleanHistory.hpp"
-#include "Time/Actions/RecordTimeStepperData.hpp"
 #include "Time/Actions/SelfStartActions.hpp"
-#include "Time/Actions/UpdateU.hpp"
 #include "Time/ChangeSlabSize/Action.hpp"
+#include "Time/RecordTimeStepperData.hpp"
 #include "Time/StepChoosers/Factory.hpp"
 #include "Time/StepChoosers/StepChooser.hpp"
 #include "Time/Tags/Time.hpp"
@@ -103,6 +103,7 @@
 #include "Time/TimeSteppers/LtsTimeStepper.hpp"
 #include "Time/TimeSteppers/TimeStepper.hpp"
 #include "Time/Triggers/TimeTriggers.hpp"
+#include "Time/UpdateU.hpp"
 #include "Utilities/ProtocolHelpers.hpp"
 #include "Utilities/TMPL.hpp"
 
@@ -198,6 +199,9 @@ struct EvolutionMetavars {
                        dg::Events::field_observations<
                            volume_dim, observe_fields, non_tensor_compute_tags>,
                        Events::time_events<system>>>>,
+        tmpl::pair<evolution::BoundaryCorrection,
+                   ScalarAdvection::BoundaryCorrections::
+                       standard_boundary_corrections<Dim>>,
         tmpl::pair<evolution::initial_data::InitialData, initial_data_list>,
         tmpl::pair<LtsTimeStepper, TimeSteppers::lts_time_steppers>,
         tmpl::pair<PhaseChange, PhaseControl::factory_creatable_classes>,
@@ -248,13 +252,10 @@ struct EvolutionMetavars {
           volume_dim, system, AllStepChoosers, local_time_stepping,
           use_dg_element_collection>,
       evolution::dg::Actions::ApplyBoundaryCorrectionsToTimeDerivative<
-          system, volume_dim, false, use_dg_element_collection>,
-      tmpl::conditional_t<
-          local_time_stepping, tmpl::list<>,
-          tmpl::list<
-              Actions::RecordTimeStepperData<system>,
-              evolution::Actions::RunEventsAndDenseTriggers<tmpl::list<>>,
-              Actions::UpdateU<system>>>,
+          volume_dim, false, use_dg_element_collection>,
+      Actions::MutateApply<RecordTimeStepperData<system>>,
+      evolution::Actions::RunEventsAndDenseTriggers<tmpl::list<>>,
+      Actions::MutateApply<UpdateU<system, local_time_stepping>>,
       Actions::CleanHistory<system, local_time_stepping>,
       Limiters::Actions::SendData<EvolutionMetavars>,
       Limiters::Actions::Limit<EvolutionMetavars>>>;
@@ -267,13 +268,10 @@ struct EvolutionMetavars {
           volume_dim, system, AllStepChoosers, local_time_stepping,
           use_dg_element_collection>,
       evolution::dg::Actions::ApplyBoundaryCorrectionsToTimeDerivative<
-          system, volume_dim, false, use_dg_element_collection>,
-      tmpl::conditional_t<
-          local_time_stepping, tmpl::list<>,
-          tmpl::list<
-              Actions::RecordTimeStepperData<system>,
-              evolution::Actions::RunEventsAndDenseTriggers<tmpl::list<>>,
-              Actions::UpdateU<system>>>,
+          volume_dim, false, use_dg_element_collection>,
+      Actions::MutateApply<RecordTimeStepperData<system>>,
+      evolution::Actions::RunEventsAndDenseTriggers<tmpl::list<>>,
+      Actions::MutateApply<UpdateU<system, local_time_stepping>>,
       evolution::dg::subcell::Actions::TciAndRollback<
           ScalarAdvection::subcell::TciOnDgGrid<Dim>>,
       Actions::CleanHistory<system, local_time_stepping>,
@@ -287,7 +285,8 @@ struct EvolutionMetavars {
           evolution::dg::subcell::Actions::Labels::BeginSubcellAfterDgRollback>,
       evolution::dg::subcell::fd::Actions::TakeTimeStep<
           ScalarAdvection::subcell::TimeDerivative<volume_dim>>,
-      Actions::RecordTimeStepperData<system>, Actions::UpdateU<system>,
+      Actions::MutateApply<RecordTimeStepperData<system>>,
+      Actions::MutateApply<UpdateU<system, local_time_stepping>>,
       Actions::CleanHistory<system, local_time_stepping>,
       evolution::dg::subcell::Actions::TciAndSwitchToDg<
           ScalarAdvection::subcell::TciOnFdGrid<volume_dim>>,
@@ -358,15 +357,26 @@ struct EvolutionMetavars {
                                             Parallel::Actions::TerminatePhase>>,
 
           Parallel::PhaseActions<
+              Parallel::Phase::WriteCheckpoint,
+              tmpl::list<evolution::Actions::RunEventsAndTriggers<
+                             Triggers::WhenToCheck::AtCheckpoints>,
+                         Parallel::Actions::TerminatePhase>>,
+
+          Parallel::PhaseActions<
               Parallel::Phase::InitializeTimeStepperHistory,
               SelfStart::self_start_procedure<step_actions, system>>,
 
           Parallel::PhaseActions<
               Parallel::Phase::Evolve,
-              tmpl::list<
-                  evolution::Actions::RunEventsAndTriggers<local_time_stepping>,
+              tmpl::flatten<tmpl::list<
+                  std::conditional_t<local_time_stepping,
+                                     evolution::Actions::RunEventsAndTriggers<
+                                         Triggers::WhenToCheck::AtSteps>,
+                                     tmpl::list<>>,
+                  evolution::Actions::RunEventsAndTriggers<
+                      Triggers::WhenToCheck::AtSlabs>,
                   Actions::ChangeSlabSize, step_actions, Actions::AdvanceTime,
-                  PhaseControl::Actions::ExecutePhaseChange>>>>;
+                  PhaseControl::Actions::ExecutePhaseChange>>>>>;
 
   struct registration
       : tt::ConformsTo<Parallel::protocols::RegistrationMetavariables> {

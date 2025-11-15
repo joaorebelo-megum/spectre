@@ -24,6 +24,7 @@
 #include "Domain/Structure/OrientationMapHelpers.hpp"
 #include "Domain/Tags.hpp"
 #include "Domain/TagsTimeDependent.hpp"
+#include "Evolution/BoundaryCorrection.hpp"
 #include "Evolution/BoundaryCorrectionTags.hpp"
 #include "Evolution/DiscontinuousGalerkin/Actions/BoundaryConditionsImpl.hpp"
 #include "Evolution/DiscontinuousGalerkin/Actions/ComputeTimeDerivativeHelpers.hpp"
@@ -53,10 +54,8 @@
 #include "Parallel/ArrayCollection/SendDataToElement.hpp"
 #include "Parallel/GlobalCache.hpp"
 #include "Parallel/Invoke.hpp"
-#include "Time/Actions/SelfStartActions.hpp"
 #include "Time/BoundaryHistory.hpp"
-#include "Time/Tags/MinimumTimeStep.hpp"
-#include "Time/TakeStep.hpp"
+#include "Time/ChangeStepSize.hpp"
 #include "Utilities/Algorithm.hpp"
 #include "Utilities/Gsl.hpp"
 #include "Utilities/TMPL.hpp"
@@ -248,33 +247,32 @@ struct get_primitive_tags_for_face {
  *
  * ### Internal Boundary Terms
  *
- * Internal boundary terms are computed from the
- * `System::boundary_correction_base` type alias. This type alias must point to
- * a base class with `creatable_classes`. Each concrete boundary correction must
- * specify:
+ * Internal boundary terms must be derived from
+ * `evolution::BoundaryCorrection`.  Each concrete boundary correction
+ * must specify:
  *
- * - type alias template `dg_package_field_tags`. These are what will be
- *   returned by `gsl::not_null` from the `dg_package_data` member function.
+ * - type alias `dg_package_field_tags`. These are what will be returned by
+ *   `gsl::not_null` from the `dg_package_data` member function.
  *
- * - type alias template `dg_package_temporary_tags`. These are temporary tags
+ * - type alias `dg_package_data_temporary_tags`. These are temporary tags
  *   that are projected to the face and then passed to the `dg_package_data`
  *   function.
  *
- * - type alias template `dg_package_primitive_tags`. These are the primitive
+ * - type alias `dg_package_data_primitive_tags`. These are the primitive
  *   variables (if any) that are projected to the face and then passed to
  *   `dg_package_data`.
  *
- * - type alias template `dg_package_volume_tags`. These are tags that are not
+ * - type alias `dg_package_data_volume_tags`. These are tags that are not
  *   projected to the interface and are retrieved directly from the `DataBox`.
- *   The equation of state for hydrodynamics systems is an example of what would
- *   be a "volume tag".
+ *   The equation of state for hydrodynamics systems is an example of what
+ *   would be a "volume tag".
  *
  * A `static constexpr bool need_normal_vector` must be specified. If `true`
  * then the normal vector is computed from the normal covector. This is
  * currently not implemented.
  *
  * The `dg_package_data` function takes as arguments `gsl::not_null` of the
- * `dg_package_data_field_tags`, then the projected evolved variables, the
+ * `dg_package_field_tags`, then the projected evolved variables, the
  * projected fluxes, the projected temporaries, the projected primitives, the
  * unit normal covector, mesh velocity, normal dotted into the mesh velocity,
  * the `volume_tags`, and finally the `dg::Formulation`. The `dg_package_data`
@@ -338,7 +336,7 @@ struct get_primitive_tags_for_face {
  *   - `Metavariables::system::variables_tag`
  *   - `Metavariables::system::flux_variables`
  *   - `Metavariables::system::primitive_tags` if exists
- *   - `system::boundary_correction_base::dg_package_data_volume_tags`
+ *   - boundary correction `dg_package_data_volume_tags`
  *
  * DataBox changes:
  * - Adds: nothing
@@ -353,11 +351,12 @@ struct ComputeTimeDerivative {
       tmpl::list<evolution::dg::Tags::BoundaryCorrectionAndGhostCellsInbox<
           Dim, UseNodegroupDgElements>>;
   using const_global_cache_tags = tmpl::append<
-      tmpl::list<::dg::Tags::Formulation,
-                 evolution::Tags::BoundaryCorrection<EvolutionSystem>,
+      tmpl::list<::dg::Tags::Formulation, evolution::Tags::BoundaryCorrection,
                  domain::Tags::ExternalBoundaryConditions<Dim>>,
-      tmpl::conditional_t<LocalTimeStepping,
-                          tmpl::list<::Tags::MinimumTimeStep>, tmpl::list<>>>;
+      tmpl::conditional_t<
+          LocalTimeStepping,
+          typename ChangeStepSize<DgStepChoosers>::const_global_cache_tags,
+          tmpl::list<>>>;
 
   template <typename DbTagsList, typename... InboxTags, typename ArrayIndex,
             typename ActionList, typename ParallelComponent,
@@ -433,9 +432,10 @@ ComputeTimeDerivative<Dim, EvolutionSystem, DgStepChoosers, LocalTimeStepping,
          "to require quite a bit of careful code refactoring and debugging.");
 
   const auto& boundary_correction =
-      db::get<evolution::Tags::BoundaryCorrection<EvolutionSystem>>(box);
+      db::get<evolution::Tags::BoundaryCorrection>(box);
   using derived_boundary_corrections =
-      typename std::decay_t<decltype(boundary_correction)>::creatable_classes;
+      tmpl::at<typename Metavariables::factory_creation::factory_classes,
+               evolution::BoundaryCorrection>;
 
   // To avoid a second allocation in internal_mortar_data, we allocate the
   // variables needed to construct the fields on the faces here along with
@@ -643,8 +643,7 @@ ComputeTimeDerivative<Dim, EvolutionSystem, DgStepChoosers, LocalTimeStepping,
       });
 
   if constexpr (LocalTimeStepping) {
-    take_step<EvolutionSystem, LocalTimeStepping, DgStepChoosers>(
-        make_not_null(&box));
+    db::mutate_apply<ChangeStepSize<DgStepChoosers>>(make_not_null(&box));
   }
 
   send_data_for_fluxes<ParallelComponent>(make_not_null(&cache),

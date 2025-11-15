@@ -56,12 +56,13 @@ void test_compute_points() {
   std::deque<ah::Storage::PreviousSurface<Fr>> previous_surfaces{};
   FastFlow fast_flow{
       FastFlow::FlowType::Fast, 1.0, 0.5, 1.e-12, 1.e-2, 1.2, 5, 100};
+  std::vector<size_t> block_order{};
 
   // We should find points
   {
     const bool coords_set_successfully = set_current_iteration_coords(
-        make_not_null(&current_iteration), time, fast_flow, initial_guess,
-        previous_iteration_surface, previous_surfaces,
+        make_not_null(&current_iteration), make_not_null(&block_order), time,
+        fast_flow, initial_guess, previous_iteration_surface, previous_surfaces,
         max_compute_coords_retries, domain, functions_of_time);
 
     // We don't check the actual points because the function basically just
@@ -88,8 +89,8 @@ void test_compute_points() {
         ylm::Strahlkorper<Fr>{l_max, initial_radius, std::array{0.0, 0.0, 0.0}};
 
     const bool coords_set_successfully = set_current_iteration_coords(
-        make_not_null(&current_iteration), time, fast_flow, initial_guess,
-        previous_iteration_surface, previous_surfaces,
+        make_not_null(&current_iteration), make_not_null(&block_order), time,
+        fast_flow, initial_guess, previous_iteration_surface, previous_surfaces,
         max_compute_coords_retries, domain, functions_of_time);
 
     REQUIRE(coords_set_successfully);
@@ -116,8 +117,8 @@ void test_compute_points() {
         ylm::Strahlkorper<Fr>{l_max, initial_radius, std::array{0.0, 0.0, 0.0}};
 
     const bool coords_set_successfully = set_current_iteration_coords(
-        make_not_null(&current_iteration), time, fast_flow, initial_guess,
-        previous_iteration_surface, previous_surfaces,
+        make_not_null(&current_iteration), make_not_null(&block_order), time,
+        fast_flow, initial_guess, previous_iteration_surface, previous_surfaces,
         max_compute_coords_retries, domain, functions_of_time);
 
     CHECK_FALSE(coords_set_successfully);
@@ -145,14 +146,16 @@ void test_compute_points() {
     const LinkedMessageId<double> prev_time_2{.id = 2.0, .previous = {1.0}};
     previous_surfaces.emplace_front(
         prev_time_2,
-        ylm::Strahlkorper<Fr>{l_max, 1.1, std::array{0.0, 0.0, 0.0}});
+        ylm::Strahlkorper<Fr>{l_max, 1.1, std::array{0.0, 0.0, 0.0}},
+        std::unordered_set<ElementId<3>>{});
     previous_surfaces.emplace_front(
         prev_time_1,
-        ylm::Strahlkorper<Fr>{l_max, 1.3, std::array{0.0, 0.0, 0.0}});
+        ylm::Strahlkorper<Fr>{l_max, 1.3, std::array{0.0, 0.0, 0.0}},
+        std::unordered_set<ElementId<3>>{});
 
     const bool coords_set_successfully = set_current_iteration_coords(
-        make_not_null(&current_iteration), time, fast_flow, initial_guess,
-        previous_iteration_surface, previous_surfaces,
+        make_not_null(&current_iteration), make_not_null(&block_order), time,
+        fast_flow, initial_guess, previous_iteration_surface, previous_surfaces,
         max_compute_coords_retries, domain, functions_of_time);
 
     REQUIRE(coords_set_successfully);
@@ -175,12 +178,12 @@ void test_compute_points() {
     const LinkedMessageId<double> prev_time{.id = 1.0,
                                             .previous = std::nullopt};
     previous_surfaces.emplace_back(
-        prev_time,
-        ylm::Strahlkorper<Fr>{l_max, 1.0, std::array{0.0, 0.0, 0.0}});
+        prev_time, ylm::Strahlkorper<Fr>{l_max, 1.0, std::array{0.0, 0.0, 0.0}},
+        std::unordered_set<ElementId<3>>{});
 
     const bool coords_set_successfully = set_current_iteration_coords(
-        make_not_null(&current_iteration), time, fast_flow, initial_guess,
-        previous_iteration_surface, previous_surfaces,
+        make_not_null(&current_iteration), make_not_null(&block_order), time,
+        fast_flow, initial_guess, previous_iteration_surface, previous_surfaces,
         max_compute_coords_retries, domain, functions_of_time);
 
     REQUIRE(coords_set_successfully);
@@ -232,8 +235,8 @@ void test_compute_points() {
         ylm::Strahlkorper<Fr>{l_max, 2.0, std::array{0.0, 0.0, 0.0}};
 
     const bool coords_set_successfully = set_current_iteration_coords(
-        make_not_null(&current_iteration), time, fast_flow, initial_guess,
-        previous_iteration_surface, previous_surfaces,
+        make_not_null(&current_iteration), make_not_null(&block_order), time,
+        fast_flow, initial_guess, previous_iteration_surface, previous_surfaces,
         max_compute_coords_retries, domain, functions_of_time);
 
     REQUIRE(coords_set_successfully);
@@ -274,6 +277,7 @@ void test_compute_points_different_resolutions() {
   std::deque<ah::Storage::PreviousSurface<Fr>> previous_surfaces{};
   const FastFlow fast_flow{
       FastFlow::FlowType::Fast, 1.0, 0.5, 1.e-12, 1.e-2, 1.2, 5, 100};
+  std::vector<size_t> block_order{};
 
   // Test case 1: current_resolution_l is set and different from initial_guess
   {
@@ -284,8 +288,8 @@ void test_compute_points_different_resolutions() {
         ylm::Strahlkorper<Fr>{l_max, 2.5, std::array{0.0, 0.0, 0.0}};
 
     const bool coords_set_successfully = set_current_iteration_coords(
-        make_not_null(&current_iteration), time, fast_flow, initial_guess,
-        previous_iteration_surface, previous_surfaces,
+        make_not_null(&current_iteration), make_not_null(&block_order), time,
+        fast_flow, initial_guess, previous_iteration_surface, previous_surfaces,
         max_compute_coords_retries, domain, functions_of_time, higher_l_max,
         false);
 
@@ -319,8 +323,8 @@ void test_compute_points_different_resolutions() {
         ylm::Strahlkorper<Fr>{l_max, 2.0, std::array{0.0, 0.0, 0.0}};
 
     const bool coords_set_successfully = set_current_iteration_coords(
-        make_not_null(&current_iteration), time, fast_flow, initial_guess,
-        previous_iteration_surface, previous_surfaces,
+        make_not_null(&current_iteration), make_not_null(&block_order), time,
+        fast_flow, initial_guess, previous_iteration_surface, previous_surfaces,
         max_compute_coords_retries, domain, functions_of_time, higher_l_max,
         true);
 
@@ -356,14 +360,16 @@ void test_compute_points_different_resolutions() {
     const LinkedMessageId<double> prev_time_2{.id = 2.0, .previous = {1.0}};
     previous_surfaces.emplace_front(
         prev_time_2,
-        ylm::Strahlkorper<Fr>{l_max, 1.1, std::array{0.0, 0.0, 0.0}});
+        ylm::Strahlkorper<Fr>{l_max, 1.1, std::array{0.0, 0.0, 0.0}},
+        std::unordered_set<ElementId<3>>{});
     previous_surfaces.emplace_front(
         prev_time_1,
-        ylm::Strahlkorper<Fr>{higher_l_max, 1.3, std::array{0.0, 0.0, 0.0}});
+        ylm::Strahlkorper<Fr>{higher_l_max, 1.3, std::array{0.0, 0.0, 0.0}},
+        std::unordered_set<ElementId<3>>{});
 
     const bool coords_set_successfully = set_current_iteration_coords(
-        make_not_null(&current_iteration), time, fast_flow, initial_guess,
-        previous_iteration_surface, previous_surfaces,
+        make_not_null(&current_iteration), make_not_null(&block_order), time,
+        fast_flow, initial_guess, previous_iteration_surface, previous_surfaces,
         max_compute_coords_retries, domain, functions_of_time, higher_l_max);
 
     REQUIRE(coords_set_successfully);
@@ -395,17 +401,20 @@ void test_compute_points_different_resolutions() {
                                               .previous = std::nullopt};
     previous_surfaces.emplace_front(
         prev_time_3,
-        ylm::Strahlkorper<Fr>{l_max, 1.0, std::array{0.0, 0.0, 0.0}});
+        ylm::Strahlkorper<Fr>{l_max, 1.0, std::array{0.0, 0.0, 0.0}},
+        std::unordered_set<ElementId<3>>{});
     previous_surfaces.emplace_front(
         prev_time_2,
-        ylm::Strahlkorper<Fr>{higher_l_max, 1.1, std::array{0.0, 0.0, 0.0}});
+        ylm::Strahlkorper<Fr>{higher_l_max, 1.1, std::array{0.0, 0.0, 0.0}},
+        std::unordered_set<ElementId<3>>{});
     previous_surfaces.emplace_front(
         prev_time_1,
-        ylm::Strahlkorper<Fr>{l_max, 1.3, std::array{0.0, 0.0, 0.0}});
+        ylm::Strahlkorper<Fr>{l_max, 1.3, std::array{0.0, 0.0, 0.0}},
+        std::unordered_set<ElementId<3>>{});
 
     const bool coords_set_successfully = set_current_iteration_coords(
-        make_not_null(&current_iteration), time, fast_flow, initial_guess,
-        previous_iteration_surface, previous_surfaces,
+        make_not_null(&current_iteration), make_not_null(&block_order), time,
+        fast_flow, initial_guess, previous_iteration_surface, previous_surfaces,
         max_compute_coords_retries, domain, functions_of_time, higher_l_max);
 
     REQUIRE(coords_set_successfully);
@@ -434,12 +443,12 @@ void test_compute_points_different_resolutions() {
     const LinkedMessageId<double> prev_time{.id = 1.0,
                                             .previous = std::nullopt};
     previous_surfaces.emplace_back(
-        prev_time,
-        ylm::Strahlkorper<Fr>{l_max, 1.0, std::array{0.0, 0.0, 0.0}});
+        prev_time, ylm::Strahlkorper<Fr>{l_max, 1.0, std::array{0.0, 0.0, 0.0}},
+        std::unordered_set<ElementId<3>>{});
 
     const bool coords_set_successfully = set_current_iteration_coords(
-        make_not_null(&current_iteration), time, fast_flow, initial_guess,
-        previous_iteration_surface, previous_surfaces,
+        make_not_null(&current_iteration), make_not_null(&block_order), time,
+        fast_flow, initial_guess, previous_iteration_surface, previous_surfaces,
         max_compute_coords_retries, domain, functions_of_time, higher_l_max,
         false);
 
@@ -469,19 +478,20 @@ void test_compute_points_different_resolutions() {
     // current_resolution_l fails
     CHECK_THROWS_WITH(
         set_current_iteration_coords(
-            make_not_null(&current_iteration), time, fast_flow, initial_guess,
-            previous_iteration_surface, previous_surfaces,
-            max_compute_coords_retries, domain, functions_of_time, std::nullopt,
-            true),
+            make_not_null(&current_iteration), make_not_null(&block_order),
+            time, fast_flow, initial_guess, previous_iteration_surface,
+            previous_surfaces, max_compute_coords_retries, domain,
+            functions_of_time, std::nullopt, true),
         Catch::Matchers::ContainsSubstring("Current resolution L is not set"));
 
     // Test that rerunning_with_higher_resolution=true with current_resolution_l
     // <= previous surface resolution fails
     CHECK_THROWS_WITH(
         set_current_iteration_coords(
-            make_not_null(&current_iteration), time, fast_flow, initial_guess,
-            previous_iteration_surface, previous_surfaces,
-            max_compute_coords_retries, domain, functions_of_time, l_max,
+            make_not_null(&current_iteration), make_not_null(&block_order),
+            time, fast_flow, initial_guess, previous_iteration_surface,
+            previous_surfaces, max_compute_coords_retries, domain,
+            functions_of_time, l_max,
             true),  // l_max is not > previous_iteration_surface.l_max()
         Catch::Matchers::ContainsSubstring(
             "Previous iteration surface has resolution"));

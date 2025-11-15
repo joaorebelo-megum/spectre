@@ -57,8 +57,11 @@ void test_set_current_time() {
   const auto add_to_all_storage = [&](const LinkedMessageId<double>& time,
                                       const Destination destination) {
     all_storage.emplace(time, ah::Storage::SingleTimeStorage<Frame::Grid>{
-                                  unused_volume_vars, unused_interation,
-                                  unused_prev_strahlkorper, destination});
+                                  unused_volume_vars,
+                                  {},
+                                  unused_interation,
+                                  unused_prev_strahlkorper,
+                                  destination});
   };
 
   // Current time has value, so do nothing
@@ -214,11 +217,12 @@ struct MockFindApparentHorizon {
                     const LinkedMessageId<double>& /*incoming_time*/,
                     const ElementId<3>& /*incoming_element_id*/,
                     const ::Mesh<3>& /*incoming_mesh*/,
-                    Variables<ah::source_vars<3>>&& /*incoming_source_vars*/,
+                    Variables<ah::vars_to_interpolate_to_target<
+                        3, MockHorizonMetavars::frame>>&& /*incoming_vars*/,
                     const std::optional<std::string>& /*dependency*/,
-                    const bool source_vars_have_already_been_received = false) {
+                    const bool vars_have_already_been_received = false) {
     ++call_count;
-    CHECK(source_vars_have_already_been_received);
+    CHECK(vars_have_already_been_received);
   }
 };
 

@@ -17,7 +17,7 @@ namespace ylm::TensorYlm {
  * \brief Fills a sparse matrix that does a TensorYlm filter operation.
  *
  * Assumes that $T^{\tilde A}_{\ell' m'}$ is stored in a
- * Tensor<DataVector>.  Multiplying the resulting
+ * Tensor<DataVector>.  Multiplying (one plus) the resulting
  * sparse matrix by the Tensor<DataVector> is equivalent to
  * evaluating the right-hand side of Eq. $(\ref{eq:Filter})$.
  *
@@ -30,7 +30,7 @@ namespace ylm::TensorYlm {
  *
  * The memory layout here is different than in SpEC.  In SpEC, each
  * tensor component is stored in separately-allocated memory, so the
- * SpEC equivalent of the FillFilter function fills $N^2$ sparse
+ * SpEC equivalent of the fill_filter function fills $N^2$ sparse
  * matrices, where $N$ is the number of independent components of the
  * Tensor. The advantage of the SpEC method is that each sparse matrix
  * is smaller, so sorting elements into the correct order while
@@ -45,6 +45,16 @@ namespace ylm::TensorYlm {
  * ## Explicit formulas
  *
  * The following formulas come from Klinger and Scheel, in prep.
+ *
+ * For rank-0 tensors, the expression is simple because there
+ * is no change of basis, only a filter based on $\ell$.
+ * \begin{align}
+ *  F_{l m \tilde{D}}^{\ell'' m''\tilde{A}} &=
+ *  \delta(\tilde{D},\tilde{A})\delta_{\ell \ell''}\delta_{m m''}
+ *  \left[1-
+ *  \delta(\ell_{\mathrm{cut}}^-\leq \ell \leq \ell_{\mathrm{max}}) g(\ell)
+ *  \right].
+ * \end{align}
  *
  * For rank-1 tensors, the expression for
  * $F_{l m \tilde{D}}^{\ell'' m''\tilde{A}}$ is
@@ -214,8 +224,8 @@ namespace ylm::TensorYlm {
  *
  */
 template <typename TensorStructure, typename SparseMatrixType>
-void FillFilter(gsl::not_null<SparseMatrixType*> matrix, size_t ell_max,
-                size_t number_of_ell_modes_to_kill,
-                std::optional<size_t> half_power);
+void fill_filter(gsl::not_null<SparseMatrixType*> matrix, size_t ell_max,
+                 size_t number_of_ell_modes_to_kill,
+                 std::optional<size_t> half_power);
 
 }  // namespace ylm::TensorYlm

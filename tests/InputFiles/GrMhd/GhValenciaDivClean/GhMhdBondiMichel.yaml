@@ -142,9 +142,11 @@ SpatialDiscretization:
     Formulation: StrongInertial
     Quadrature: GaussLobatto
   BoundaryCorrection:
-    ProductUpwindPenaltyAndRusanov:
-      UpwindPenalty:
+    ProductAveragedUpwindPenaltyAndRusanov:
+      AveragedUpwindPenalty:
       Rusanov:
+
+EventsAndTriggersAtCheckpoints:
 
 EventsAndTriggersAtSlabs:
   - Trigger:
@@ -232,6 +234,7 @@ EventsAndTriggersAtSlabs:
       - Completion
 
 ApparentHorizons:
+  LMax: 4
   AhA:
     InitialGuess:
       LMax: 4

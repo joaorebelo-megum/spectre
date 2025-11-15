@@ -15,6 +15,7 @@ set(LIBRARY_SOURCES
   Test_Tags.cpp
   Test_TensorYlmCartToSphere.cpp
   Test_TensorYlmFilter.cpp
+  Test_TensorYlmSphereToCart.cpp
   Test_WignerThreeJ.cpp
   Test_YlmToStf.cpp
   )
@@ -26,9 +27,11 @@ target_link_libraries(
   PRIVATE
   DataStructures
   GrSurfaces
+  H5
   RootFinding
   SphericalHarmonics
   SphericalHarmonicsHelpers
+  SphericalHarmonicsIO
   SpinWeightedSphericalHarmonics
   Utilities
   )

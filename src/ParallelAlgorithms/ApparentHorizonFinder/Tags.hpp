@@ -99,7 +99,7 @@ struct Dependency : db::SimpleTag {
  * \details The value of this tag is `std::nullopt` if the current resolution L
  * isn't set.
  */
- struct CurrentResolutionL : db::SimpleTag {
+struct CurrentResolutionL : db::SimpleTag {
   using type = std::optional<size_t>;
 };
 
@@ -114,11 +114,32 @@ struct Storage : db::SimpleTag {
 };
 
 /*!
+ * \brief Order in which blocks are searched for horizon finding. See
+ * `::block_logical_coordinates` for details.
+ */
+struct BlockSearchOrder : db::SimpleTag {
+  using type = std::vector<size_t>;
+};
+
+/*!
  * \brief Deque of `ah::Storage::PreviousSurface`s.
  */
 template <typename Fr>
 struct PreviousSurfaces : db::SimpleTag {
   using type = std::deque<ah::Storage::PreviousSurface<Fr>>;
+};
+
+/*!
+ * \brief Holds the previous surface. Used to determine which elements will send
+ * data for the next horizon find.
+ */
+template <typename HorizonMetavars>
+struct PreviousSurface : db::SimpleTag {
+  using type =
+      ah::Storage::LockedPreviousSurface<typename HorizonMetavars::frame>;
+  using option_tags = tmpl::list<>;
+  static constexpr bool pass_metavariables = false;
+  static type create_from_options() { return {}; }
 };
 
 /*!
@@ -280,5 +301,15 @@ struct ObserveCenters : db::SimpleTag {
 
   static constexpr bool pass_metavariables = false;
   static type create_from_options(const type& option) { return option; }
+};
+
+/// \ingroup DataBoxTagsGroup
+/// DataBox tag that holds the maximum L for horizon resolution and output.
+struct LMax : db::SimpleTag {
+  using type = size_t;
+
+  using option_tags = tmpl::list<OptionTags::LMax>;
+  static constexpr bool pass_metavariables = false;
+  static type create_from_options(const size_t max_l) { return max_l; }
 };
 }  // namespace ah::Tags

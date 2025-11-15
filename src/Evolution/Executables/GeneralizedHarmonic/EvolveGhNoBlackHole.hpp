@@ -41,7 +41,8 @@ struct EvolutionMetavars
   static constexpr bool use_dg_element_collection =
       gh_base::use_dg_element_collection;
 
-  using step_actions = typename gh_base::template step_actions<tmpl::list<>>;
+  using step_actions =
+      typename gh_base::template step_actions<EvolutionMetavars, tmpl::list<>>;
 
   using gh_dg_element_array = DgElementArray<
       EvolutionMetavars,
@@ -72,16 +73,25 @@ struct EvolutionMetavars
           Parallel::PhaseActions<Parallel::Phase::Restart,
                                  tmpl::list<dg_registration_list,
                                             Parallel::Actions::TerminatePhase>>,
+          Parallel::PhaseActions<
+              Parallel::Phase::WriteCheckpoint,
+              tmpl::list<evolution::Actions::RunEventsAndTriggers<
+                             Triggers::WhenToCheck::AtCheckpoints>,
+                         Parallel::Actions::TerminatePhase>>,
           Parallel::PhaseActions<Parallel::Phase::CheckDomain,
                                  tmpl::list<::amr::Actions::SendAmrDiagnostics,
                                             Parallel::Actions::TerminatePhase>>,
           Parallel::PhaseActions<
               Parallel::Phase::Evolve,
-              tmpl::list<::evolution::Actions::RunEventsAndTriggers<
-                             local_time_stepping>,
-                         Actions::ChangeSlabSize, step_actions,
-                         Actions::AdvanceTime,
-                         PhaseControl::Actions::ExecutePhaseChange>>>>>;
+              tmpl::flatten<tmpl::list<
+                  std::conditional_t<local_time_stepping,
+                                     evolution::Actions::RunEventsAndTriggers<
+                                         Triggers::WhenToCheck::AtSteps>,
+                                     tmpl::list<>>,
+                  ::evolution::Actions::RunEventsAndTriggers<
+                      Triggers::WhenToCheck::AtSlabs>,
+                  Actions::ChangeSlabSize, step_actions, Actions::AdvanceTime,
+                  PhaseControl::Actions::ExecutePhaseChange>>>>>>;
 
   struct amr : tt::ConformsTo<::amr::protocols::AmrMetavariables> {
     using element_array = gh_dg_element_array;
