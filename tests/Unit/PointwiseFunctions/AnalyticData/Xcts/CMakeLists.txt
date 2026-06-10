@@ -4,6 +4,7 @@
 set(LIBRARY "Test_XctsAnalyticData")
 
 set(LIBRARY_SOURCES
+  Test_BackgroundRegistry.cpp
   Test_Binary.cpp
   Test_KerrSchildTeukolsky.cpp
   )

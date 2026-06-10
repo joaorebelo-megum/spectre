@@ -10,6 +10,7 @@ spectre_target_sources(
   PRIVATE
   Binary.cpp
   KerrSchildTeukolsky.cpp
+  PerturbationBackground.cpp
   )
 
 spectre_target_headers(
@@ -21,6 +22,7 @@ spectre_target_headers(
   CommonVariables.hpp
   CommonVariables.tpp
   KerrSchildTeukolsky.hpp
+  PerturbationBackground.hpp
   )
 
 target_link_libraries(
