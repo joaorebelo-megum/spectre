@@ -10,6 +10,7 @@ spectre_target_sources(
   PRIVATE
   Binary.cpp
   KerrSchildTeukolsky.cpp
+  NumericBinaryWithWaves.cpp
   PerturbationBackground.cpp
   )
 
@@ -22,6 +23,7 @@ spectre_target_headers(
   CommonVariables.hpp
   CommonVariables.tpp
   KerrSchildTeukolsky.hpp
+  NumericBinaryWithWaves.hpp
   PerturbationBackground.hpp
   )
 

@@ -202,20 +202,19 @@ class PerturbationBackground
       if (selected_components_[0]) {
         get<0, 0>(metric) += profile;
       }
+      // The conformal metric is symmetric, so the off-diagonal components are
+      // stored once and must only be perturbed once.
       if (selected_components_[1]) {
         get<0, 1>(metric) += profile;
-        get<1, 0>(metric) += profile;
       }
       if (selected_components_[2]) {
         get<0, 2>(metric) += profile;
-        get<2, 0>(metric) += profile;
       }
       if (selected_components_[3]) {
         get<1, 1>(metric) += profile;
       }
       if (selected_components_[4]) {
         get<1, 2>(metric) += profile;
-        get<2, 1>(metric) += profile;
       }
       if (selected_components_[5]) {
         get<2, 2>(metric) += profile;

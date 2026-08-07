@@ -7,6 +7,7 @@ set(LIBRARY_SOURCES
   Test_BackgroundRegistry.cpp
   Test_Binary.cpp
   Test_KerrSchildTeukolsky.cpp
+  Test_NumericBinaryWithWaves.cpp
   )
 
 add_test_library(${LIBRARY} "${LIBRARY_SOURCES}")

@@ -6,6 +6,7 @@ set(LIBRARY "Test_XctsBoundaryConditions")
 set(LIBRARY_SOURCES
   Test_ApparentHorizon.cpp
   Test_Flatness.cpp
+  Test_NumericData.cpp
   Test_Robin.cpp
   )
 
@@ -17,8 +18,11 @@ target_link_libraries(
   CoordinateMaps
   DataStructures
   Domain
+  DomainCreators
   DomainStructure
   Elliptic
+  Exporter
+  H5
   GeneralRelativity
   GeneralRelativitySolutions
   LinearOperators
