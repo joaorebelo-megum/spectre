@@ -11,7 +11,6 @@ spectre_target_sources(
   Binary.cpp
   KerrSchildTeukolsky.cpp
   NumericBinaryWithWaves.cpp
-  PerturbationBackground.cpp
   )
 
 spectre_target_headers(
@@ -24,7 +23,6 @@ spectre_target_headers(
   CommonVariables.tpp
   KerrSchildTeukolsky.hpp
   NumericBinaryWithWaves.hpp
-  PerturbationBackground.hpp
   )
 
 target_link_libraries(
@@ -44,5 +42,7 @@ target_link_libraries(
   Utilities
   PRIVATE
   ElasticityPointwiseFunctions
+  OdeIntegration
+  RootFinding
   XctsPointwiseFunctions
   )

@@ -3,9 +3,7 @@
 
 #include "Framework/TestingFramework.hpp"
 
-#include <cmath>
 #include <cstddef>
-#include <memory>
 #include <string>
 #include <vector>
 
@@ -18,7 +16,6 @@
 #include "Domain/Structure/ElementId.hpp"
 #include "Elliptic/Executables/Xcts/SolveXcts.hpp"
 #include "Elliptic/Systems/Xcts/Tags.hpp"
-#include "Framework/TestCreation.hpp"
 #include "IO/Exporter/PointwiseInterpolator.hpp"
 #include "IO/H5/AccessType.hpp"
 #include "IO/H5/File.hpp"
@@ -27,13 +24,10 @@
 #include "NumericalAlgorithms/Spectral/Basis.hpp"
 #include "NumericalAlgorithms/Spectral/Mesh.hpp"
 #include "NumericalAlgorithms/Spectral/Quadrature.hpp"
-#include "Options/Protocols/FactoryCreation.hpp"
-#include "PointwiseFunctions/AnalyticData/Xcts/PerturbationBackground.hpp"
-#include "PointwiseFunctions/AnalyticSolutions/Xcts/Flatness.hpp"
+#include "PointwiseFunctions/AnalyticData/Xcts/NumericBinaryWithWaves.hpp"
 #include "PointwiseFunctions/InitialDataUtilities/Background.hpp"
 #include "PointwiseFunctions/InitialDataUtilities/NumericData.hpp"
 #include "Utilities/FileSystem.hpp"
-#include "Utilities/ProtocolHelpers.hpp"
 #include "Utilities/Serialization/RegisterDerivedClassesWithCharm.hpp"
 #include "Utilities/Serialization/Serialize.hpp"
 #include "Utilities/TMPL.hpp"
@@ -51,40 +45,21 @@ using loaded_tags =
 
 // `SolveXcts.hpp` defines the executable's metavariables in the global
 // namespace. Check the factory registration against those, so this test fails
-// if the background is dropped from the executable that actually uses it.
+// if a background is dropped from the executable that actually uses it.
 using solve_xcts_backgrounds =
     tmpl::at<typename ::Metavariables::factory_creation::factory_classes,
              elliptic::analytic_data::Background>;
 static_assert(
-    tmpl::list_contains_v<solve_xcts_backgrounds, PerturbationBackground>,
-    "PerturbationBackground must be registered in the SolveXcts background "
+    tmpl::list_contains_v<solve_xcts_backgrounds, NumericBinaryWithWaves>,
+    "NumericBinaryWithWaves must be registered in the SolveXcts background "
     "factory.");
 static_assert(tmpl::list_contains_v<solve_xcts_backgrounds,
                                     elliptic::analytic_data::NumericData>,
               "NumericData must be registered in the SolveXcts background "
               "factory.");
 
-// A minimal factory list for option-parsing tests, so we don't have to register
-// every class of the executable with Charm.
-struct TestMetavariables {
-  struct factory_creation
-      : tt::ConformsTo<Options::protocols::FactoryCreation> {
-    using factory_classes =
-        tmpl::map<tmpl::pair<elliptic::analytic_data::Background,
-                             tmpl::list<PerturbationBackground,
-                                        elliptic::analytic_data::NumericData>>>;
-  };
-};
-
 const std::string h5_file_name{
-    "Unit.PointwiseFunctions.AnalyticData.Xcts.PerturbationBackground.h5"};
-constexpr double amplitude = 0.1;
-constexpr double sigma = 2.0;
-
-// The Gaussian that `PerturbationBackground` adds to the conformal metric.
-double expected_profile(const double x, const double y, const double z) {
-  return amplitude * exp(-(x * x + y * y + z * z) / (sigma * sigma));
-}
+    "Unit.PointwiseFunctions.AnalyticData.Xcts.BackgroundRegistry.h5"};
 
 // Datasets in SpECTRE volume files are named `db::tag_name<Tag>()` plus a
 // component suffix. `Xcts::Tags::ConformalMetric` is the prefix tag
@@ -154,8 +129,8 @@ void write_volume_file() {
       serialize(domain));
 }
 
-// Load the volume file directly, without any perturbation, to separate a
-// failure of the numeric loading from a failure of the perturbation.
+// Load the volume file with the generic numeric background. This is the
+// loading path that `NumericBinaryWithWaves` also relies on.
 void test_numeric_loading(const tnsr::I<DataVector, 3, Frame::Inertial>& x) {
   INFO("Load the conformal metric from a volume file");
   const elliptic::analytic_data::NumericData numeric_data{
@@ -175,96 +150,12 @@ void test_numeric_loading(const tnsr::I<DataVector, 3, Frame::Inertial>& x) {
   CHECK_ITERABLE_APPROX((get<0, 0>(inverse_conformal_metric)), expected_ones);
 }
 
-// Create the wrapper from options with a numeric background, as an input file
-// would, and check that the loaded metric comes back perturbed.
-void test_perturbed_numeric_background(
-    const tnsr::I<DataVector, 3, Frame::Inertial>& x) {
-  INFO("Perturb a conformal metric loaded from a volume file");
-  const auto created = TestHelpers::test_creation<
-      std::unique_ptr<elliptic::analytic_data::Background>, TestMetavariables>(
-      "PerturbationBackground:\n"
-      "  Background:\n"
-      "    NumericData:\n"
-      "      FileGlob: " +
-      h5_file_name +
-      "\n"
-      "      Subgroup: element_data\n"
-      "      ObservationStep: 0\n"
-      "      ExtrapolateIntoExcisions: False\n"
-      "  Amplitude: 0.1\n"
-      "  Sigma: 2.0\n"
-      "  Components: [xx]\n");
-  REQUIRE(dynamic_cast<const PerturbationBackground*>(created.get()) !=
-          nullptr);
-  const auto& background =
-      dynamic_cast<const PerturbationBackground&>(*created);
-
-  // Cloning round-trips the wrapped background through serialization, so this
-  // also checks that the numeric background is registered with Charm.
-  const auto cloned = background.get_clone();
-  REQUIRE(dynamic_cast<const PerturbationBackground*>(cloned.get()) != nullptr);
-
-  const size_t num_points = get<0>(x).size();
-  DataVector expected_xx{num_points};
-  for (size_t i = 0; i < num_points; ++i) {
-    expected_xx[i] =
-        1.0 + expected_profile(get<0>(x)[i], get<1>(x)[i], get<2>(x)[i]);
-  }
-  const DataVector expected_ones{num_points, 1.0};
-
-  for (const auto* const to_check :
-       {&background,
-        dynamic_cast<const PerturbationBackground*>(cloned.get())}) {
-    const auto vars = to_check->variables(x, loaded_tags{});
-    const auto& conformal_metric = get<conformal_metric_tag>(vars);
-    const auto& inverse_conformal_metric =
-        get<inverse_conformal_metric_tag>(vars);
-    // Only the xx component was selected for perturbation.
-    CHECK_ITERABLE_APPROX((get<0, 0>(conformal_metric)), expected_xx);
-    CHECK_ITERABLE_APPROX((get<1, 1>(conformal_metric)), expected_ones);
-    CHECK_ITERABLE_APPROX((get<2, 2>(conformal_metric)), expected_ones);
-    // The inverse is recomputed from the perturbed metric, so it is no longer
-    // the inverse metric that was loaded from the file.
-    CHECK_ITERABLE_APPROX((get<0, 0>(inverse_conformal_metric)),
-                          DataVector{1.0 / expected_xx});
-    CHECK_ITERABLE_APPROX((get<1, 1>(inverse_conformal_metric)), expected_ones);
-  }
-}
-
-// The same perturbation on an analytic background, where no file I/O is
-// involved.
-void test_perturbed_analytic_background(
-    const tnsr::I<DataVector, 3, Frame::Inertial>& x) {
-  INFO("Perturb a flat analytic background");
-  const PerturbationBackground background{
-      std::make_unique<Xcts::Solutions::Flatness>(), amplitude, sigma,
-      std::vector<std::string>{"xx", "yz"}};
-  const auto vars = background.variables(x, loaded_tags{});
-  const auto& conformal_metric = get<conformal_metric_tag>(vars);
-  const size_t num_points = get<0>(x).size();
-  DataVector expected_xx{num_points};
-  DataVector expected_yz{num_points};
-  for (size_t i = 0; i < num_points; ++i) {
-    const double profile =
-        expected_profile(get<0>(x)[i], get<1>(x)[i], get<2>(x)[i]);
-    expected_xx[i] = 1.0 + profile;
-    expected_yz[i] = profile;
-  }
-  CHECK_ITERABLE_APPROX((get<0, 0>(conformal_metric)), expected_xx);
-  CHECK_ITERABLE_APPROX((get<1, 2>(conformal_metric)), expected_yz);
-  // The perturbation is symmetric.
-  CHECK_ITERABLE_APPROX((get<2, 1>(conformal_metric)), expected_yz);
-  const DataVector expected_zeros{num_points, 0.0};
-  CHECK_ITERABLE_APPROX((get<0, 1>(conformal_metric)), expected_zeros);
-}
-
 }  // namespace
 
 SPECTRE_TEST_CASE(
     "Unit.PointwiseFunctions.AnalyticData.Xcts.BackgroundRegistry",
     "[PointwiseFunctions][Unit]") {
-  register_classes_with_charm<PerturbationBackground, Xcts::Solutions::Flatness,
-                              elliptic::analytic_data::NumericData>();
+  register_classes_with_charm<elliptic::analytic_data::NumericData>();
   // Target points in the interior of the brick. Points on element boundaries
   // are ambiguous on Gauss-Lobatto grids, so they are avoided here.
   const tnsr::I<DataVector, 3, Frame::Inertial> x{
@@ -274,8 +165,6 @@ SPECTRE_TEST_CASE(
   test_dataset_names();
   write_volume_file();
   test_numeric_loading(x);
-  test_perturbed_numeric_background(x);
-  test_perturbed_analytic_background(x);
   file_system::rm(h5_file_name, true);
 }
 
