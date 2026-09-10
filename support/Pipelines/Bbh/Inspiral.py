@@ -273,7 +273,14 @@ def inspiral_parameters(
     else:
         id_shape_A = id_domain_creator["TimeDependentMaps"]["ShapeMapA"]
         id_shape_B = id_domain_creator["TimeDependentMaps"]["ShapeMapB"]
-        id_binary = id_input_file["Background"]["Binary"]
+        # The frame of the initial data. Initial data with added waves (see
+        # 'AddWave.py') carries it in its 'NumericBinaryWithWaves' background.
+        id_background = id_input_file["Background"]
+        id_binary = (
+            id_background["NumericBinaryWithWaves"]
+            if "NumericBinaryWithWaves" in id_background
+            else id_background["Binary"]
+        )
         horizons_filename = (
             Path(id_horizons_path)
             if id_horizons_path is not None

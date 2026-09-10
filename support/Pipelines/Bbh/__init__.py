@@ -11,6 +11,7 @@ from spectre.support.CliExceptions import RequiredChoiceError
 class Bbh(click.Group):
     def list_commands(self, ctx):
         return [
+            "add-waves",
             "eccentricity-control",
             "find-horizon",
             "generate-id",
@@ -21,7 +22,11 @@ class Bbh(click.Group):
         ]
 
     def get_command(self, ctx, name):
-        if name in ["eccentricity-control", "ecc-control"]:
+        if name == "add-waves":
+            from .AddWave import add_waves_command
+
+            return add_waves_command
+        elif name in ["eccentricity-control", "ecc-control"]:
             from .EccentricityControl import eccentricity_control_command
 
             return eccentricity_control_command

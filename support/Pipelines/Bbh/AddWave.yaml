@@ -1,0 +1,263 @@
+# Distributed under the MIT License.
+# See LICENSE.txt for details.
+
+Executable: SolveXcts
+{{ TargetParams }}
+ExpectedOutput:
+  - AddWaveReductions.h5
+  - AddWaveVolume*.h5
+Next:
+  Run: spectre.Pipelines.Bbh.PostprocessId:postprocess_id
+  With:
+    id_input_file_path: __file__
+    id_run_dir: ./
+    horizon_l_max: {{ HorizonLMax }}
+    # Only find the horizons in the new data. Masses and spins were already
+    # controlled in the initial data this run starts from.
+    control: False
+    evolve: False
+
+---
+
+# Adds post-Newtonian gravitational waves to BBH initial data. The initial data
+# is loaded as both background and initial guess, and the XCTS equations are
+# solved again on the evolution domain (see 'Inspiral.yaml'), so the waves are
+# resolved and the evolution can start from this grid.
+
+Parallelization:
+  ElementDistribution: NumGridPoints
+
+Background: &background
+  NumericBinaryWithWaves:
+    DataFile: &id_file_glob "{{ IdFileGlob }}"
+    Subgroup: &id_subfile "{{ IdSubfile }}"
+    ObservationStep: -1
+    # The initial data extends far beyond this domain, so no extrapolation is
+    # needed
+    ExtrapolateIntoExcisions: False
+    # Helical Killing vector of the initial data. It determines the time
+    # derivative of the loaded conformal metric in the inertial frame.
+    AngularVelocity: {{ OrbitalAngularVelocity }}
+    Expansion: {{ RadialExpansionVelocity }}
+    # Present state of the post-Newtonian past evolution that generates the
+    # waves. The orbit is derived from these, not from the angular velocity and
+    # expansion above.
+    Separation: {{ Separation }}
+    TargetEccentricity: {{ TargetEccentricity }}
+    MassLeft: {{ MassLeft }}
+    MassRight: {{ MassRight }}
+    # Switches the waves off near each black hole, where the post-Newtonian
+    # expressions diverge
+    AttenuationWidth: {{ AttenuationWidth }}
+    # Must cover the retarded time of the outermost grid point
+    PastEvolutionDuration: {{ PastEvolutionDuration }}
+    PastEvolutionTimeStep: {{ PastEvolutionTimeStep }}
+
+InitialGuess: *background
+
+DomainCreator:
+  BinaryCompactObject:
+    ObjectA:
+      InnerRadius: {{ ExcisionRadiusA }}
+      OuterRadius: {{ ObjectOuterRadius }}
+      XCoord: {{ XCoordA }}
+      Interior:
+        # Imposes the initial data on the excision surfaces
+        ExciseWithBoundaryCondition:
+          NumericData: &numeric_data_bc
+            DataFile: *id_file_glob
+            Subgroup: *id_subfile
+            ObservationStep: -1
+            ExtrapolateIntoExcisions: False
+      UseLogarithmicMap: true
+    ObjectB:
+      InnerRadius: {{ ExcisionRadiusB }}
+      OuterRadius: {{ ObjectOuterRadius }}
+      XCoord: {{ XCoordB }}
+      Interior:
+        ExciseWithBoundaryCondition:
+          NumericData: *numeric_data_bc
+      UseLogarithmicMap: true
+    CenterOfMassOffset: [{{ CenterOfMassOffset_y }}, {{ CenterOfMassOffset_z }}]
+    Envelope:
+      Radius: &outer_shell_inner_radius {{ EnvelopeRadius }}
+      # Logarithmic to transition from grid point spacing around the excisions
+      # to the grid point spacing in the outer shell
+      RadialDistribution: Logarithmic
+    OuterShell:
+      UseSphericalHarmonics: false
+      Radius: &outer_radius {{ OuterShellRadius }}
+      RadialPartitioning: []
+      # Linear to resolve gravitational waves
+      RadialDistribution: &outer_shell_distribution Linear
+      OpeningAngle: 120.0
+      BoundaryCondition: Robin
+    UseEquiangularMap: True
+    CubeScale: 1.2
+    # Same resolution as the evolution (see 'Inspiral.yaml')
+    InitialRefinement:
+      ObjectAShell:   [{{ L + 1 }}, {{ L + 1 }}, {{ L + 1 }}]
+      ObjectACube:    [{{ L + 2 }}, {{ L + 2 }}, {{ L + 1 }}]
+      ObjectBShell:   [{{ L + 1 }}, {{ L + 1 }}, {{ L + 1 + ExtraRadRef }}]
+      ObjectBCube:    [{{ L + 2 }}, {{ L + 2 }}, {{ L + 1 }}]
+      Envelope:       [{{ L + 1 }}, {{ L + 1 }}, {{ L + 1 }}]
+      OuterShell0:    [{{ L     }}, {{ L     }}, {{ L + 2 }}]
+    InitialGridPoints:
+      ObjectAShell:   [{{ P + 3 }}, {{ P + 3 }}, {{ P + 1 }}]
+      ObjectACube:    [{{ P     }}, {{ P     }}, {{ P - 1 }}]
+      ObjectBShell:   [{{ P + 3 }}, {{ P + 3 }}, {{ P + 1 + ExtraRadPoints }}]
+      ObjectBCube:    [{{ P     }}, {{ P     }}, {{ P - 1 }}]
+      Envelope:       [{{ P + 3 }}, {{ P + 3 }}, {{ P + 5 }}]
+      OuterShell0:    [{{ P + 3 }}, {{ P + 3 }}, {{ P + 4 }}]
+    UseWorldtube: false
+    # The shape maps of the initial data, which has the same excisions
+    TimeDependentMaps:
+      InitialTime: 0.
+      ExpansionMap: None
+      RotationMap: None
+      TranslationMap: None
+      SkewMap: None
+      ShapeMapA:
+        LMax: {{ HorizonLMax }}
+        CoefficientTruncationLimit: 0.
+        InitialValues:
+          Mass: {{ ExcisionAShapeMass }}
+          Spin:
+            - {{ ExcisionAShapeSpin_x }}
+            - {{ ExcisionAShapeSpin_y }}
+            - {{ ExcisionAShapeSpin_z }}
+        SizeInitialValues: Auto
+        TransitionEndsAtCube: False
+      ShapeMapB:
+        LMax: {{ HorizonLMax }}
+        CoefficientTruncationLimit: 0.
+        InitialValues:
+          Mass: {{ ExcisionBShapeMass }}
+          Spin:
+            - {{ ExcisionBShapeSpin_x }}
+            - {{ ExcisionBShapeSpin_y }}
+            - {{ ExcisionBShapeSpin_z }}
+        SizeInitialValues: Auto
+        TransitionEndsAtCube: False
+      GridCenters: None
+
+Amr:
+  Verbosity: Verbose
+  Criteria: []
+  EnableInBlocks: All
+  Policies:
+    EnforceTwoToOneBalanceInNormalDirection: true
+    Isotropy: Anisotropic
+    Limits:
+      NumGridPoints: Auto
+      RefinementLevel: Auto
+      ErrorBeyondLimits: False
+    AllowCoarsening: True
+  MaxCoarseLevels: Auto
+  Iterations: 1
+
+PhaseChangeAndTriggers: []
+
+Discretization:
+  DiscontinuousGalerkin:
+    PenaltyParameter: 1.5
+    Massive: True
+    Quadrature: GaussLobatto
+    Formulation: WeakInertial
+
+Observers:
+  VolumeFileName: "AddWaveVolume"
+  ReductionFileName: "AddWaveReductions"
+
+NonlinearSolver:
+  NewtonRaphson:
+    ConvergenceCriteria:
+      MaxIterations: 20
+      RelativeResidual: 0.
+      AbsoluteResidual: 1.e-8
+    SufficientDecrease: 1.e-4
+    MaxGlobalizationSteps: 10
+    DampingFactor: 1.
+    Verbosity: Verbose
+
+LinearSolver:
+  Gmres:
+    ConvergenceCriteria:
+      MaxIterations: 100
+      RelativeResidual: 1.e-3
+      AbsoluteResidual: 1.e-9
+    Verbosity: Quiet
+
+  Multigrid:
+    Iterations: 1
+    InitialCoarseLevels: Auto
+    PreSmoothing: True
+    UseBottomSolver: False
+    PostSmoothingAtBottom: True
+    Verbosity: Silent
+    OutputVolumeData: False
+
+  SchwarzSmoother:
+    MaxOverlap: 2
+    Iterations: 3
+    Verbosity: Silent
+    SubdomainSolver:
+      Gmres:
+        ConvergenceCriteria:
+          MaxIterations: 3
+          RelativeResidual: 1.e-4
+          AbsoluteResidual: 1.e-10
+        Verbosity: Silent
+        Restart: None
+        Preconditioner:
+          MinusLaplacian:
+            Solver:
+              ExplicitInverse:
+                WriteMatrixToFile: None
+            BoundaryConditions: Auto
+    SkipResets: True
+    ObservePerCoreReductions: False
+    OutputVolumeData: False
+
+RadiallyCompressedCoordinates:
+  InnerRadius: *outer_shell_inner_radius
+  OuterRadius: *outer_radius
+  Compression: *outer_shell_distribution
+
+# Same fields as the initial data, plus the constraints as quality measure
+EventsAndTriggersAtIterations:
+  - Trigger: HasConverged
+    Events:
+      - ObserveFields:
+          SubfileName: VolumeData
+          VariablesToObserve:
+            - ConformalFactor
+            - Lapse
+            - Shift
+            - ShiftExcess
+            - SpatialMetric
+            - InverseSpatialMetric
+            - SpatialChristoffelSecondKind
+            - ExtrinsicCurvature
+            - SpatialRicci
+            - HamiltonianConstraint
+            - MomentumConstraint
+            - RadiallyCompressedCoordinates
+          InterpolateToMesh: None
+          ProjectToMesh: None
+          CoordinatesFloatingPointType: Double
+          FloatingPointTypes: [Double]
+          BlocksToObserve: All
+      - ObserveAdmIntegrals
+
+RandomizeInitialGuess: None
+
+ResourceInfo:
+  AvoidGlobalProc0: false
+  Singletons: Auto
+
+BuildMatrix:
+  MatrixSubfileName: None
+  Verbosity: Verbose
+  EnableDirectSolve: True
+  SkipResets: True

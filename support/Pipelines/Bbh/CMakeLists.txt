@@ -6,6 +6,8 @@ spectre_python_add_module(
   MODULE_PATH Pipelines
   PYTHON_FILES
   __init__.py
+  AddWave.py
+  AddWave.yaml
   Cce.py
   Cce.yaml
   ControlId.py

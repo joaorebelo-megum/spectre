@@ -9,14 +9,19 @@
 
 {% block head %}
 {{ super() -}}
-## The sbatch command should set the following parameters.
-## For example by adding them as extra parameters (-p) to Schedule.py
-##SBATCH --account {{ account }}
-##SBATCH --mail-user {{ mail_user }}
+## Set the account, the mail user and the task layout with extra parameters,
+## e.g. `-p account=... -p mail_user=... -p slurm_ntasks_per_node=2
+## -p slurm_cpus_per_task=64`
+{% if account is defined %}
+#SBATCH --account {{ account }}
+{% endif %}
+{% if mail_user is defined %}
+#SBATCH --mail-user {{ mail_user }}
+{% endif %}
 #SBATCH --mail-type ALL
 #SBATCH --nodes {{ num_nodes | default(1) }}
-#SBATCH --ntasks-per-node {{ num_slurm_tasks | default(8) }}
-#SBATCH --cpus-per-task=16
+#SBATCH --ntasks-per-node {{ slurm_ntasks_per_node | default(num_slurm_tasks | default(8)) }}
+#SBATCH --cpus-per-task={{ slurm_cpus_per_task | default(16) }}
 #SBATCH --time {{ time_limit | default("2-00:00:00") }}
 #SBATCH --partition {{ queue | default("normal-x86") }}
 {% endblock %}

@@ -96,11 +96,12 @@ def postprocess_id(
     with open(id_input_file_path, "r") as open_input_file:
         id_metadata, id_input_file = yaml.safe_load_all(open_input_file)
     target_params = id_metadata["TargetParams"]
-    x_B, x_A = id_input_file["Background"]["Binary"]["XCoords"]
-    y_offset, z_offset = id_input_file["Background"]["Binary"][
-        "CenterOfMassOffset"
-    ]
     id_domain = id_input_file["DomainCreator"]["BinaryCompactObject"]
+    # Positions from the domain rather than the background, so this also works
+    # for initial data with added waves, whose background is not a 'Binary'.
+    x_A = id_domain["ObjectA"]["XCoord"]
+    x_B = id_domain["ObjectB"]["XCoord"]
+    y_offset, z_offset = id_domain["CenterOfMassOffset"]
     excision_radius_A = id_domain[f"ObjectA"]["InnerRadius"]
     excision_radius_B = id_domain[f"ObjectB"]["InnerRadius"]
     volfile_name = id_input_file["Observers"]["VolumeFileName"]

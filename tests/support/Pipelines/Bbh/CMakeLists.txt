@@ -2,6 +2,13 @@
 # See LICENSE.txt for details.
 
 spectre_add_python_bindings_test(
+  "support.Pipelines.Bbh.AddWave"
+  Test_AddWave.py
+  "Python"
+  None
+  TIMEOUT 60)
+
+spectre_add_python_bindings_test(
   "support.Pipelines.Bbh.Cce"
   Test_Cce.py
   "Python"
