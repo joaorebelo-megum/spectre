@@ -26,6 +26,7 @@
 #include "PointwiseFunctions/InitialDataUtilities/InitialGuess.hpp"
 #include "Utilities/Gsl.hpp"
 #include "Utilities/MakeWithValue.hpp"
+#include "Utilities/Requires.hpp"
 #include "Utilities/Serialization/CharmPupable.hpp"
 #include "Utilities/TMPL.hpp"
 
@@ -950,6 +951,18 @@ struct NumericBinaryWithWavesVariables
 class NumericBinaryWithWaves : public elliptic::analytic_data::Background,
                                public elliptic::analytic_data::InitialGuess {
  public:
+  /// The quantities this class can supply. `variables` is constrained to these
+  /// so that `elliptic::BoundaryConditions::detail::has_boundary_variables`
+  /// reports false for anything else. That trait is SFINAE on whether
+  /// `variables(x, tmpl::list<Tag>{})` is well formed, so an unconstrained
+  /// template would claim to provide every tag and only fail deep inside the
+  /// `CachedTempBuffer`, where it is a hard error rather than a substitution
+  /// failure. The boundary condition dispatches over the whole `InitialGuess`
+  /// factory list, so it instantiates this for flux tags we do not have.
+  template <typename DataType>
+  using tags = typename detail::NumericBinaryWithWavesVariablesCache<
+      DataType>::tags_list;
+
   struct DataFile {
     static constexpr Options::String help =
         "Path or glob pattern to the volume data of the previous solve";
@@ -1083,7 +1096,9 @@ class NumericBinaryWithWaves : public elliptic::analytic_data::Background,
   using PUP::able::register_constructor;
   WRAPPED_PUPable_decl_template(NumericBinaryWithWaves);
 
-  template <typename DataType, typename... RequestedTags>
+  template <typename DataType, typename... RequestedTags,
+            Requires<tmpl2::flat_all_v<tmpl::list_contains_v<
+                tags<DataType>, RequestedTags>...>> = nullptr>
   tuples::TaggedTuple<RequestedTags...> variables(
       const tnsr::I<DataType, 3, Frame::Inertial>& x,
       tmpl::list<RequestedTags...> /*meta*/) const {
@@ -1091,7 +1106,9 @@ class NumericBinaryWithWaves : public elliptic::analytic_data::Background,
                                     tmpl::list<RequestedTags...>{});
   }
 
-  template <typename... RequestedTags>
+  template <typename... RequestedTags,
+            Requires<tmpl2::flat_all_v<tmpl::list_contains_v<
+                tags<DataVector>, RequestedTags>...>> = nullptr>
   tuples::TaggedTuple<RequestedTags...> variables(
       const tnsr::I<DataVector, 3, Frame::Inertial>& x, const Mesh<3>& mesh,
       const InverseJacobian<DataVector, 3, Frame::ElementLogical,
