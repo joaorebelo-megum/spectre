@@ -192,8 +192,13 @@ class FindApparentHorizon : public Event {
     auto& horizon_finder_proxy = Parallel::get_parallel_component<
         ah::Component<Metavariables, HorizonMetavars>>(cache);
 
+    // Send to the single element of the singleton instead of broadcasting to
+    // the whole (single-element) array. Charm++ stores broadcasts to
+    // dynamically inserted arrays, which singletons are, for one to two
+    // minutes on every process, so broadcasting this volume data at every
+    // horizon find holds a lot of memory.
     Parallel::simple_action<ah::FindApparentHorizon<HorizonMetavars>>(
-        horizon_finder_proxy, time, element_id, mesh,
+        horizon_finder_proxy[0], time, element_id, mesh,
         std::move(vars_to_interpolate_to_target), dependency_);
   }
 
