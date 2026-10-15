@@ -252,9 +252,16 @@ struct PnInspiral {
   std::vector<std::array<double, 6>> state{};
   /// \f$(\dot{\vec{q}}, \dot{\vec{p}})\f$ at each sample
   std::vector<std::array<double, 6>> dt_state{};
+  /// Factor multiplying the bodies' momenta in the wave terms of
+  /// \f$h^{TT}_{ij}\f$ at each sample (see
+  /// `leading_order_kinetic_wave_scale`). Empty means no rescaling.
+  std::vector<double> kinetic_wave_scale{};
 
   /// The earliest time covered, \f$-(N-1)\Delta t\f$
   double earliest_time() const;
+
+  /// `kinetic_wave_scale` at `time`, linearly interpolated; 1 if it is empty
+  double kinetic_wave_scale_at(double time) const;
 
   /*!
    * \brief The reduced state \f$(\vec{q}, \vec{p})\f$ at `time`
@@ -297,6 +304,43 @@ PnInspiral evolve_binary_backwards(double separation, double angular_velocity,
                                    double duration, double time_step,
                                    bool with_radiation_reaction = true);
 /// @}
+
+/*!
+ * \brief Rescaling of the momenta in the wave terms of \f$h^{TT}_{ij}\f$ that
+ * gives the gauge-invariant leading-order wave amplitude
+ *
+ * The \f$h^{TT}_{ij}\f$ of Kelly et al. is a leading-order expression. Far from
+ * the binary its radiated part is proportional to \f$(K + G)/2\f$, with the
+ * kinetic and potential stresses
+ *
+ * \f{equation}
+ * K = \sum_A \frac{p_A^2}{m_A} = \mu\hat{p}^2, \qquad
+ * G = \frac{m_1 m_2}{r_{12}} = \frac{\mu}{q},
+ * \f}
+ *
+ * which are equal on a Newtonian circular orbit, where the amplitude is the
+ * quadrupole one, \f$\mu x\f$ with \f$x = (M\Omega)^{2/3}\f$. With the 3PN
+ * canonical momenta of the past evolution, \f$K\f$ is about 40% larger than
+ * \f$G\f$ at \f$q = 12\f$, so the waves come out about 30% too strong for
+ * their frequency (report 026). The kinetic arguments
+ * \f$\vec{p}_A/\sqrt{m_A}\f$ of the retarded and interval pieces are therefore
+ * multiplied by
+ *
+ * \f{equation}
+ * s = \sqrt{\frac{2x - 1/q}{\hat{p}^2}},
+ * \f}
+ *
+ * which makes \f$(K + G)/2 = \mu x\f$ at every time of the past evolution, with
+ * \f$\Omega = |\vec{q}\times\dot{\vec{q}}|/q^2\f$ the post-Newtonian orbital
+ * frequency. The potential arguments are left unchanged, so the present-time
+ * potential pieces inside `htt_instantaneous` still match the retarded ones,
+ * and the instantaneous term does not depend on the momenta at all. The orbit
+ * itself is not changed. \f$s \to 1\f$ in the Newtonian limit.
+ *
+ * Returns one factor per sample of `inspiral`, in the same order.
+ */
+std::vector<double> leading_order_kinetic_wave_scale(
+    const PnInspiral& inspiral);
 
 /// \name Post-Newtonian wave content
 /// @{
@@ -1064,11 +1108,23 @@ class NumericBinaryWithWaves : public elliptic::analytic_data::Background,
     static double suggested_value() { return 0.5; }
     static double lower_bound() { return 0.0; }
   };
+  struct GaugeInvariantWaveAmplitude {
+    static constexpr Options::String help =
+        "Rescale the bodies' momenta in the wave terms so that the wave "
+        "amplitude is the leading-order value for the post-Newtonian orbital "
+        "frequency, mu (M Omega)^(2/3). Without this the leading-order wave "
+        "expressions are evaluated with 3PN momenta and the waves come out "
+        "about 30% too strong for their frequency at a separation of 12 M. "
+        "The orbit itself is not changed. See "
+        "'leading_order_kinetic_wave_scale'.";
+    using type = bool;
+    static bool suggested_value() { return true; }
+  };
   using options =
       tmpl::list<DataFile, Subgroup, ObservationStep, ExtrapolateIntoExcisions,
                  AngularVelocity, Expansion, Separation, TargetEccentricity,
                  MassLeft, MassRight, AttenuationWidth, PastEvolutionDuration,
-                 PastEvolutionTimeStep>;
+                 PastEvolutionTimeStep, GaugeInvariantWaveAmplitude>;
   static constexpr Options::String help =
       "Binary black hole initial data built from a previous XCTS solve, with "
       "post-Newtonian gravitational waves added.";
@@ -1090,7 +1146,8 @@ class NumericBinaryWithWaves : public elliptic::analytic_data::Background,
                          double mass_left, double mass_right,
                          double attenuation_width,
                          double past_evolution_duration,
-                         double past_evolution_time_step);
+                         double past_evolution_time_step,
+                         bool gauge_invariant_wave_amplitude);
 
   explicit NumericBinaryWithWaves(CkMigrateMessage* m)
       : elliptic::analytic_data::Background(m),
@@ -1138,6 +1195,9 @@ class NumericBinaryWithWaves : public elliptic::analytic_data::Background,
   double mass_right() const { return mass_right_; }
   double past_evolution_duration() const { return past_evolution_duration_; }
   double past_evolution_time_step() const { return past_evolution_time_step_; }
+  bool gauge_invariant_wave_amplitude() const {
+    return gauge_invariant_wave_amplitude_;
+  }
 
   /// The past trajectory of the binary, from which the wave content at
   /// retarded times is built.
@@ -1174,6 +1234,7 @@ class NumericBinaryWithWaves : public elliptic::analytic_data::Background,
       std::numeric_limits<double>::signaling_NaN();
   double past_evolution_time_step_ =
       std::numeric_limits<double>::signaling_NaN();
+  bool gauge_invariant_wave_amplitude_{false};
   // Computed once in the constructor and on unpacking, then read only. Cheap
   // enough (one ODE integration) that serializing it would be no faster.
   detail::PnInspiral pn_inspiral_{};

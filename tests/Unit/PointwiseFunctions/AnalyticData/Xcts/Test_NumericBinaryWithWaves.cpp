@@ -980,6 +980,101 @@ void test_instantaneous_regression() {
   CHECK_ITERABLE_APPROX(value, expected);
 }
 
+// M Omega from the Hamiltonian velocity at `time`, independently of the
+// stored `dt_state` that `leading_order_kinetic_wave_scale` uses.
+double pn_orbital_frequency(const detail::PnInspiral& inspiral,
+                            const double time) {
+  const auto state = inspiral.state_at(time);
+  const auto rhs = detail::inspiral_rhs(state, inspiral.eta);
+  const double q_squared =
+      square(state[0]) + square(state[1]) + square(state[2]);
+  const std::array<double, 3> l{{state[1] * rhs[2] - state[2] * rhs[1],
+                                 state[2] * rhs[0] - state[0] * rhs[2],
+                                 state[0] * rhs[1] - state[1] * rhs[0]}};
+  return std::sqrt(square(l[0]) + square(l[1]) + square(l[2])) / q_squared;
+}
+
+// Report 029: the factor s of `leading_order_kinetic_wave_scale` makes
+// (K + G)/2 = mu x with K = mu s^2 p^2, G = mu / q and x = (M Omega)^(2/3). It
+// tends to one in the Newtonian limit, and is well below one at q = 12, where
+// the 3PN canonical momentum is about 18% above the Newtonian one.
+void test_kinetic_wave_scale() {
+  INFO("Leading-order rescaling of the momenta in the wave terms");
+  for (const double separation : {12.0, 1000.0}) {
+    CAPTURE(separation);
+    const double omega = detail::circular_orbit(separation, pn_eta)[1];
+    const auto inspiral = detail::evolve_binary_backwards(
+        separation, omega, 0.0, pn_eta, 40.0, 2.0);
+    const auto scale = detail::leading_order_kinetic_wave_scale(inspiral);
+    REQUIRE(scale.size() == inspiral.state.size());
+    for (size_t n = 0; n < scale.size(); ++n) {
+      CAPTURE(n);
+      const auto& state = inspiral.state[n];
+      const double q =
+          std::sqrt(square(state[0]) + square(state[1]) + square(state[2]));
+      const double p_squared =
+          square(state[3]) + square(state[4]) + square(state[5]);
+      const double x = std::cbrt(square(pn_orbital_frequency(
+          inspiral, -inspiral.time_step * static_cast<double>(n))));
+      CHECK(0.5 * (square(scale[n]) * p_squared + 1.0 / q) == approx(x));
+    }
+    if (separation > 100.0) {
+      CHECK(std::abs(scale.front() - 1.0) < 1.0e-2);
+    } else {
+      // (2 x - 1/q) / p^2 with the q = 12 values of report 010
+      Approx loose_approx = Approx::custom().epsilon(1.0e-2).scale(1.0);
+      CHECK(scale.front() == loose_approx(0.786));
+    }
+  }
+
+  // Interpolation in time, and no rescaling when the factors are absent
+  const double omega = detail::circular_orbit(12.0, pn_eta)[1];
+  auto inspiral =
+      detail::evolve_binary_backwards(12.0, omega, 0.0, pn_eta, 40.0, 2.0);
+  CHECK(inspiral.kinetic_wave_scale_at(-3.0) == 1.0);
+  inspiral.kinetic_wave_scale =
+      detail::leading_order_kinetic_wave_scale(inspiral);
+  CHECK(inspiral.kinetic_wave_scale_at(0.0) ==
+        approx(inspiral.kinetic_wave_scale[0]));
+  CHECK(inspiral.kinetic_wave_scale_at(-3.0) ==
+        approx(0.5 * (inspiral.kinetic_wave_scale[1] +
+                      inspiral.kinetic_wave_scale[2])));
+}
+
+// Face-on, far from the binary, the retarded piece of a circular orbit is
+// h_+ - i h_x with amplitude 4 (K + G)/2 / r. With the rescaling this must be
+// the gauge-invariant leading-order amplitude 4 mu x / r, with x taken at the
+// retarded time. Without it the amplitude is about 30% larger (report 026).
+void test_gauge_invariant_wave_amplitude() {
+  INFO("The rescaled retarded wave has the leading-order amplitude");
+  // Quasi-circular at q = 12, back far enough for the retarded time at r = 200
+  auto inspiral = detail::evolve_binary_backwards(
+      12.0, detail::circular_orbit(12.0, pn_eta)[1], 0.0, pn_eta, 400.0, 2.0);
+  const double radius = 200.0;
+  const tnsr::I<DataVector, 3, Frame::Inertial> x{
+      {{DataVector{0.0}, DataVector{0.0}, DataVector{radius}}}};
+  const auto times = detail::retarded_times(x, inspiral, 0.5, 0.5, 0.0);
+  // On the axis both bodies are equally far away.
+  CHECK(times[0][0] == approx(times[1][0]));
+  const double x_retarded =
+      std::cbrt(square(pn_orbital_frequency(inspiral, times[0][0])));
+  const double expected = 4.0 * 0.25 * x_retarded / radius;
+
+  const auto amplitude = [&x, &times](const detail::PnInspiral& trajectory) {
+    tnsr::ii<DataVector, 3> h{};
+    detail::htt_retarded(make_not_null(&h), x, trajectory, 0.5, 0.5, times);
+    const double h_plus = 0.5 * (get<0, 0>(h)[0] - get<1, 1>(h)[0]);
+    const double h_cross = get<0, 1>(h)[0];
+    return std::sqrt(square(h_plus) + square(h_cross));
+  };
+  CHECK(amplitude(inspiral) / expected > 1.2);
+  inspiral.kinetic_wave_scale =
+      detail::leading_order_kinetic_wave_scale(inspiral);
+  // Corrections are O((r_12/r)^2) from the geometry of the two bodies
+  Approx far_field_approx = Approx::custom().epsilon(5.0e-3).scale(1.0);
+  CHECK(amplitude(inspiral) / expected == far_field_approx(1.0));
+}
+
 // A trajectory for the wave tests: quasi-circular at D = 12, long enough to
 // cover the retarded time of everything inside r ~ 300.
 detail::PnInspiral wave_test_trajectory() {
@@ -1346,6 +1441,8 @@ SPECTRE_TEST_CASE(
   test_instantaneous_falls_off();
   test_instantaneous_is_transverse_traceless();
   test_instantaneous_regression();
+  test_kinetic_wave_scale();
+  test_gauge_invariant_wave_amplitude();
   test_retarded_time();
   test_retarded_falls_off_like_one_over_r();
   test_close_approach_in_the_near_zone();
@@ -1357,19 +1454,17 @@ SPECTRE_TEST_CASE(
   // r_A ~ 6 from each body, where an attenuation width of 1e6 gives
   // f_att ~ 1e-21, far below round-off. That lets the loading, the unimodular
   // split and the Killing-vector time derivative be checked in isolation.
-  const NumericBinaryWithWaves background{h5_file_name,
-                                          "element_data",
-                                          0,
-                                          false,
-                                          angular_velocity,
-                                          expansion,
+  const NumericBinaryWithWaves background{h5_file_name, "element_data", 0,
+                                          false, angular_velocity, expansion,
                                           /*separation=*/12.0,
                                           /*target_eccentricity=*/0.0,
                                           /*mass_left=*/0.5,
                                           /*mass_right=*/0.5,
                                           /*attenuation_width=*/1.0e6,
                                           /*past_evolution_duration=*/50.0,
-                                          /*past_evolution_time_step=*/2.0};
+                                          /*past_evolution_time_step=*/2.0,
+                                          /*gauge_invariant_wave_amplitude=*/
+                                          false};
   // The same data with a realistic attenuation width, so the wave is present.
   const NumericBinaryWithWaves background_with_waves{
       h5_file_name,
@@ -1384,7 +1479,8 @@ SPECTRE_TEST_CASE(
       /*mass_right=*/0.5,
       /*attenuation_width=*/3.6,
       /*past_evolution_duration=*/50.0,
-      /*past_evolution_time_step=*/2.0};
+      /*past_evolution_time_step=*/2.0,
+      /*gauge_invariant_wave_amplitude=*/false};
 
   // Serialization drops the loaded data and the trajectory and rebuilds both,
   // so this checks that the round trip is faithful.
@@ -1394,6 +1490,26 @@ SPECTRE_TEST_CASE(
     CHECK(deserialized == background);
     CHECK(deserialized.pn_inspiral() == background.pn_inspiral());
     CHECK(not background.pn_inspiral().state.empty());
+    CHECK(background.pn_inspiral().kinetic_wave_scale.empty());
+
+    // The rescaled wave amplitude is rebuilt on unpacking as well.
+    const NumericBinaryWithWaves rescaled{h5_file_name, "element_data", 0,
+                                          false, angular_velocity, expansion,
+                                          /*separation=*/12.0,
+                                          /*target_eccentricity=*/0.0,
+                                          /*mass_left=*/0.5,
+                                          /*mass_right=*/0.5,
+                                          /*attenuation_width=*/3.6,
+                                          /*past_evolution_duration=*/50.0,
+                                          /*past_evolution_time_step=*/2.0,
+                                          /*gauge_invariant_wave_amplitude=*/
+                                          true};
+    CHECK(rescaled != background_with_waves);
+    const auto deserialized_rescaled = serialize_and_deserialize(rescaled);
+    CHECK(deserialized_rescaled == rescaled);
+    CHECK(deserialized_rescaled.pn_inspiral() == rescaled.pn_inspiral());
+    CHECK(rescaled.pn_inspiral().kinetic_wave_scale.size() ==
+          rescaled.pn_inspiral().state.size());
   }
 
   // Interior points of the brick; boundary points are ambiguous on

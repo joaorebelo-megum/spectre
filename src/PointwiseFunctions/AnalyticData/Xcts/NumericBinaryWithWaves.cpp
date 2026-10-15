@@ -319,16 +319,63 @@ std::array<double, 6> PnInspiral::state_at(const double time) const {
   return result;
 }
 
+double PnInspiral::kinetic_wave_scale_at(const double time) const {
+  if (kinetic_wave_scale.empty()) {
+    return 1.0;
+  }
+  ASSERT(kinetic_wave_scale.size() == state.size(),
+         "One kinetic wave scale per trajectory sample is expected, got "
+             << kinetic_wave_scale.size() << " for " << state.size()
+             << " samples.");
+  ASSERT(time <= 0.0 and time >= earliest_time() * (1.0 + 1.0e-12),
+         "Time " << time << " is outside the evolved interval ["
+                 << earliest_time() << ", 0].");
+  // The factor varies on the inspiral time scale, so linear interpolation
+  // between samples is ample.
+  const double sample_coordinate = -time / time_step;
+  const size_t lower = std::min(static_cast<size_t>(sample_coordinate),
+                                kinetic_wave_scale.size() - 2);
+  const double theta = sample_coordinate - static_cast<double>(lower);
+  return (1.0 - theta) * kinetic_wave_scale[lower] +
+         theta * kinetic_wave_scale[lower + 1];
+}
+
 void PnInspiral::pup(PUP::er& p) {
   p | time_step;
   p | eta;
   p | state;
   p | dt_state;
+  p | kinetic_wave_scale;
 }
 
 bool operator==(const PnInspiral& lhs, const PnInspiral& rhs) {
   return lhs.time_step == rhs.time_step and lhs.eta == rhs.eta and
-         lhs.state == rhs.state and lhs.dt_state == rhs.dt_state;
+         lhs.state == rhs.state and lhs.dt_state == rhs.dt_state and
+         lhs.kinetic_wave_scale == rhs.kinetic_wave_scale;
+}
+
+std::vector<double> leading_order_kinetic_wave_scale(
+    const PnInspiral& inspiral) {
+  std::vector<double> result(inspiral.state.size());
+  for (size_t n = 0; n < inspiral.state.size(); ++n) {
+    const auto& state = inspiral.state[n];
+    const auto& dt_state = inspiral.dt_state[n];
+    const std::array<double, 3> q{{state[0], state[1], state[2]}};
+    const std::array<double, 3> p{{state[3], state[4], state[5]}};
+    const std::array<double, 3> dt_q{{dt_state[0], dt_state[1], dt_state[2]}};
+    const double q_squared = dot_product(q, q);
+    // M Omega = |q x dq/dt| / q^2 in the reduced units of the trajectory
+    const double orbital_frequency =
+        magnitude(cross_product(q, dt_q)) / q_squared;
+    const double x = std::cbrt(square(orbital_frequency));
+    const double numerator = 2.0 * x - 1.0 / std::sqrt(q_squared);
+    ASSERT(numerator > 0.0,
+           "The leading-order wave amplitude needs 2x > 1/q, got x = "
+               << x << " at q = " << std::sqrt(q_squared)
+               << ". The orbit is too far from the post-Newtonian regime.");
+    result[n] = std::sqrt(numerator / dot_product(p, p));
+  }
+  return result;
 }
 
 bool operator!=(const PnInspiral& lhs, const PnInspiral& rhs) {
@@ -799,14 +846,16 @@ void htt_retarded(const gsl::not_null<tnsr::ii<DataType, 3>*> result,
         gsl::at(normal, i) = gsl::at(offset, i) * inverse_radius;
       }
 
-      // + H[p_a / sqrt(m_a)]
+      // + H[s p_a / sqrt(m_a)], with s from `leading_order_kinetic_wave_scale`
+      // (1 unless the gauge-invariant wave amplitude is requested)
       const double body_mass = (body == 0) ? mass_1 : mass_2;
-      const double inverse_sqrt_mass = 1.0 / sqrt(body_mass);
+      const double momentum_factor =
+          inspiral.kinetic_wave_scale_at(time / (mass_1 + mass_2)) /
+          sqrt(body_mass);
       std::array<double, 3> u_momentum{};
       for (size_t i = 0; i < 3; ++i) {
         gsl::at(u_momentum, i) =
-            gsl::at(gsl::at(configuration.momenta, body), i) *
-            inverse_sqrt_mass;
+            gsl::at(gsl::at(configuration.momenta, body), i) * momentum_factor;
       }
       add_retarded(point, 1.0, u_momentum, normal, inverse_radius);
 
@@ -986,11 +1035,15 @@ void htt_interval(const gsl::not_null<tnsr::ii<DataType, 3>*> result,
           gsl::at(normal, i) = gsl::at(offset, i) * inverse_radius;
         }
 
+        // s p_a / sqrt(m_a), as in `htt_retarded`
+        const double momentum_factor =
+            inspiral.kinetic_wave_scale_at(time / (mass_1 + mass_2)) *
+            inverse_sqrt_mass;
         std::array<double, 3> u_momentum{};
         for (size_t i = 0; i < 3; ++i) {
           gsl::at(u_momentum, i) =
               gsl::at(gsl::at(configuration.momenta, body), i) *
-              inverse_sqrt_mass;
+              momentum_factor;
         }
         accumulate(point, weight, u_momentum, normal, 1.0, elapsed,
                    inverse_radius);
@@ -1467,7 +1520,8 @@ NumericBinaryWithWaves::NumericBinaryWithWaves(
     const double expansion, const double separation,
     const double target_eccentricity, const double mass_left,
     const double mass_right, const double attenuation_width,
-    const double past_evolution_duration, const double past_evolution_time_step)
+    const double past_evolution_duration, const double past_evolution_time_step,
+    const bool gauge_invariant_wave_amplitude)
     : data_file_(std::move(data_file)),
       subgroup_(std::move(subgroup)),
       observation_step_(observation_step),
@@ -1480,7 +1534,8 @@ NumericBinaryWithWaves::NumericBinaryWithWaves(
       mass_left_(mass_left),
       mass_right_(mass_right),
       past_evolution_duration_(past_evolution_duration),
-      past_evolution_time_step_(past_evolution_time_step) {
+      past_evolution_time_step_(past_evolution_time_step),
+      gauge_invariant_wave_amplitude_(gauge_invariant_wave_amplitude) {
   load_interpolator();
   evolve_past();
 }
@@ -1492,7 +1547,8 @@ NumericBinaryWithWaves::NumericBinaryWithWaves(
           rhs.extrapolate_into_excisions_, rhs.angular_velocity_,
           rhs.expansion_, rhs.separation_, rhs.target_eccentricity_,
           rhs.mass_left_, rhs.mass_right_, rhs.attenuation_width_,
-          rhs.past_evolution_duration_, rhs.past_evolution_time_step_) {}
+          rhs.past_evolution_duration_, rhs.past_evolution_time_step_,
+          rhs.gauge_invariant_wave_amplitude_) {}
 
 NumericBinaryWithWaves& NumericBinaryWithWaves::operator=(
     const NumericBinaryWithWaves& rhs) {
@@ -1559,6 +1615,10 @@ void NumericBinaryWithWaves::evolve_past() {
       detail::evolve_binary_backwards(separation, orbit[0], orbit[1], eta,
                                       past_evolution_duration_ / total_mass,
                                       past_evolution_time_step_ / total_mass);
+  if (gauge_invariant_wave_amplitude_) {
+    pn_inspiral_.kinetic_wave_scale =
+        detail::leading_order_kinetic_wave_scale(pn_inspiral_);
+  }
 }
 
 void NumericBinaryWithWaves::pup(PUP::er& p) {
@@ -1577,6 +1637,7 @@ void NumericBinaryWithWaves::pup(PUP::er& p) {
   p | mass_right_;
   p | past_evolution_duration_;
   p | past_evolution_time_step_;
+  p | gauge_invariant_wave_amplitude_;
   // Neither the loaded volume data nor the past evolution is serialized. The
   // first is reloaded so that every node reads the file once rather than
   // shipping it around; the second is cheap enough to recompute.
@@ -1603,7 +1664,9 @@ bool operator==(const NumericBinaryWithWaves& lhs,
          lhs.mass_left() == rhs.mass_left() and
          lhs.mass_right() == rhs.mass_right() and
          lhs.past_evolution_duration() == rhs.past_evolution_duration() and
-         lhs.past_evolution_time_step() == rhs.past_evolution_time_step();
+         lhs.past_evolution_time_step() == rhs.past_evolution_time_step() and
+         lhs.gauge_invariant_wave_amplitude() ==
+             rhs.gauge_invariant_wave_amplitude();
 }
 
 bool operator!=(const NumericBinaryWithWaves& lhs,

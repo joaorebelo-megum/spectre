@@ -52,6 +52,10 @@ Background: &background
     # Must cover the retarded time of the outermost grid point
     PastEvolutionDuration: {{ PastEvolutionDuration }}
     PastEvolutionTimeStep: {{ PastEvolutionTimeStep }}
+    # Wave amplitude mu (M Omega)^(2/3) for the post-Newtonian orbital
+    # frequency, instead of the leading-order expressions evaluated with 3PN
+    # momenta
+    GaugeInvariantWaveAmplitude: {{ GaugeInvariantWaveAmplitude }}
 
 InitialGuess: *background
 

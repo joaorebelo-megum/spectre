@@ -78,6 +78,7 @@ class TestAddWave(unittest.TestCase):
             params["PastEvolutionDuration"], 1.5 * (800.0 + 20.0)
         )
         self.assertEqual(params["PastEvolutionTimeStep"], 0.5)
+        self.assertTrue(params["GaugeInvariantWaveAmplitude"])
 
         self.id_metadata["TargetParams"]["Eccentricity"] = 0.1
         with self.assertRaisesRegex(ValueError, "eccentricity of zero"):

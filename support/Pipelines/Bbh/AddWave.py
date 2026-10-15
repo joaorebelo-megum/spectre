@@ -120,6 +120,9 @@ def add_wave_parameters(
                 1.5 * (params["OuterShellRadius"] + separation)
             ),
             "PastEvolutionTimeStep": 0.5,
+            # Wave amplitude consistent with the post-Newtonian orbital
+            # frequency (report 029)
+            "GaugeInvariantWaveAmplitude": True,
         }
     )
     return params
