@@ -361,15 +361,17 @@ void post_newtonian_kernel(gsl::not_null<tnsr::ii<DataType, 3>*> result,
  * \f}
  *
  * where \f$s = r_A + r_B + r_{12}\f$, \f$c_A = \hat{n}_{12}\cdot\hat{n}_A\f$,
- * \f$\hat{n}_{12}\f$ points from body 1 to body 2, and \f$\sigma_A = \pm 1\f$
- * for \f$A = 1, 2\f$. Derived in report 003.
+ * \f$\hat{n}_{12}\f$ points from body 1 to body 2, and \f$\sigma_1 = -1\f$,
+ * \f$\sigma_2 = +1\f$. Then \f$\sigma_A\hat{n}_{12} = \hat{n}_{AB}\f$, which
+ * points from body \f$B\f$ to body \f$A\f$ as in Kelly et al. Eq. (12).
+ * Derived in report 003; orientation corrected in report 028.
+ *
+ * The result is transverse and traceless away from the bodies, and falls off
+ * like \f$1/r^3\f$ (Kelly et al. Eq. (31)): the present-time pieces cancel the
+ * \f$1/r\f$ and \f$1/r^2\f$ parts of the near-zone term.
  *
  * \warning This is only the instantaneous part. The full \f$h^{TT}_{ij}\f$ adds
- * the retarded and interval pieces of the remainder, which are not implemented
- * yet. On its own the \f$n_A^i n_A^j\f$ coefficient grows like
- * \f$-4r/r_{12}^3\f$ at large \f$r\f$ — an artefact of the near-zone expansion
- * that the retarded terms are supposed to cancel. Do not use this alone as wave
- * content far from the binary.
+ * the retarded and interval pieces of the remainder, which carry the waves.
  *
  * \note Diverges at the punctures, like the near-zone expansion itself. The
  * attenuation function is applied afterwards.

@@ -531,8 +531,10 @@ void htt_instantaneous(const gsl::not_null<tnsr::ii<DataType, 3>*> result,
   const std::array<BodyGeometry<DataType>, 2> bodies{
       {body_geometry(x, position_1), body_geometry(x, position_2)}};
 
-  // n_12 points from body 1 to body 2, and sigma_A = +1, -1 for A = 1, 2, so
-  // that n_AB = sigma_A n_12. This is the only place the orientation matters:
+  // n_12 = (x_2 - x_1) / r_12 points from body 1 to body 2. Kelly et al.
+  // (0704.0628) Eq. (12) uses n_AB = (x_A - x_B) / r_AB, so n_AB = sigma_A n_12
+  // with sigma_A = -1, +1 for A = 1, 2. Only this orientation makes h^TT(4)
+  // traceless and transverse. This is the only place the orientation matters:
   // every other appearance of n_12 is quadratic.
   std::array<double, 3> separation_vector{};
   for (size_t i = 0; i < 3; ++i) {
@@ -559,7 +561,7 @@ void htt_instantaneous(const gsl::not_null<tnsr::ii<DataType, 3>*> result,
   for (size_t body = 0; body < 2; ++body) {
     const auto& near = gsl::at(bodies, body);
     const auto& far = gsl::at(bodies, 1 - body);
-    const double sigma = (body == 0) ? 1.0 : -1.0;
+    const double sigma = (body == 0) ? -1.0 : 1.0;
 
     DataType cos_angle = make_with_value<DataType>(near.radius, 0.0);
     for (size_t i = 0; i < 3; ++i) {

@@ -642,7 +642,8 @@ tnsr::ii<DataVector, 3> near_zone_mass_term(
   for (size_t body = 0; body < 2; ++body) {
     const auto& near = gsl::at(bodies, body);
     const auto& far = gsl::at(bodies, 1 - body);
-    const double sigma = (body == 0) ? 1.0 : -1.0;
+    // n_AB = (x_A - x_B) / r_AB = sigma_A n12 in Kelly et al. Eq. (12)
+    const double sigma = (body == 0) ? -1.0 : 1.0;
     const DataVector& ra = near.radius;
     const DataVector& rb = far.radius;
     const DataVector s = ra + rb + r12;
@@ -846,40 +847,137 @@ void test_instantaneous_structure() {
 // +2(r_A + r_B)/r_12^3 -> +4r/r_12^3 per body, and at large r the two normals
 // coincide, so summed over both bodies the -8r/r_12^3 and +8r/r_12^3 cancel.
 //
-// This test measures the actual falloff. It is deliberately strict, because the
-// cancellation is exactly the kind of thing a later refactor could break.
+// Kelly et al. Eq. (31) is stronger still: the present-time pieces cancel the
+// 1/r *and* 1/r^2 parts of the near-zone term, so the instantaneous term falls
+// off like 1/r^3. Report 028 found that the earlier version of this test, which
+// only required decay at least as fast as 1/r, let a sign error through that
+// left a 1/r field reaching into the wave zone. The slope is measured on the
+// norm of the tensor, along several directions.
 void test_instantaneous_falls_off() {
-  INFO("The instantaneous term decays at least as fast as 1/r");
-  const std::array<double, 3> position_1{{6.0, 0.0, 0.0}};
-  const std::array<double, 3> position_2{{-6.0, 0.0, 0.0}};
-  const DataVector radii{50.0, 100.0, 200.0, 400.0, 800.0};
-  // A generic direction, so that no component is accidentally special and the
-  // n_A n_A structure is not aligned with a single tensor slot.
-  const double direction_x = 0.5;
-  const double direction_y = 0.7;
-  const double direction_z = 0.5099019513592785;
-  const tnsr::I<DataVector, 3, Frame::Inertial> x{
-      {{radii * direction_x, radii * direction_y, radii * direction_z}}};
-  tnsr::ii<DataVector, 3> value{};
-  detail::htt_instantaneous(make_not_null(&value), x, position_1, position_2,
-                            0.5, 0.5);
-
-  for (size_t i = 0; i < 3; ++i) {
-    for (size_t j = i; j < 3; ++j) {
-      const DataVector& component = value.get(i, j);
-      for (size_t k = 1; k < radii.size(); ++k) {
-        // Local power-law slope between successive radii.
-        const double slope =
-            std::log(std::abs(component[k] / component[k - 1])) /
-            std::log(radii[k] / radii[k - 1]);
-        CAPTURE(i);
-        CAPTURE(j);
-        CAPTURE(radii[k]);
-        CAPTURE(slope);
-        CHECK(slope < -0.9);
+  INFO("The instantaneous term falls off like 1/r^3");
+  const std::array<double, 3> position_1{{6.0, 0.3, 0.1}};
+  const std::array<double, 3> position_2{{-6.0, -0.3, -0.1}};
+  const DataVector radii{100.0, 200.0, 400.0, 800.0, 1600.0};
+  for (const auto& direction :
+       {std::array<double, 3>{{0.5, 0.7, 0.5099019513592785}},
+        std::array<double, 3>{{0.9, -0.1, 0.4242640687119285}},
+        std::array<double, 3>{{-0.2, 0.3, -0.9327379053088815}}}) {
+    const tnsr::I<DataVector, 3, Frame::Inertial> x{
+        {{radii * direction[0], radii * direction[1], radii * direction[2]}}};
+    tnsr::ii<DataVector, 3> value{};
+    detail::htt_instantaneous(make_not_null(&value), x, position_1, position_2,
+                              0.5, 0.5);
+    DataVector norm = make_with_value<DataVector>(radii, 0.0);
+    for (size_t i = 0; i < 3; ++i) {
+      for (size_t j = 0; j < 3; ++j) {
+        norm += square(value.get(i, j));
       }
     }
+    norm = sqrt(norm);
+    for (size_t k = 1; k < radii.size(); ++k) {
+      // Local power-law slope between successive radii.
+      const double slope =
+          std::log(norm[k] / norm[k - 1]) / std::log(radii[k] / radii[k - 1]);
+      CAPTURE(direction[0]);
+      CAPTURE(direction[1]);
+      CAPTURE(direction[2]);
+      CAPTURE(radii[k]);
+      CAPTURE(slope);
+      CHECK(slope < -2.8);
+    }
   }
+}
+
+// h^TT(4) of Jaranowski & Schaefer, and each present-time piece of Kelly et
+// al., are transverse and traceless away from the bodies, so their combination
+// is too. This pins down the orientation of n_AB in the only term that is odd
+// in it (report 028): the other orientation leaves a trace and a divergence of
+// order one. The divergence is taken by centred finite differences.
+void test_instantaneous_is_transverse_traceless() {
+  INFO("The instantaneous term is transverse and traceless");
+  const std::array<double, 3> position_1{{5.0, 1.0, -0.5}};
+  const std::array<double, 3> position_2{{-7.0, -2.0, 0.5}};
+  const double mass_1 = 0.6;
+  const double mass_2 = 0.4;
+  const auto x = wave_test_points();
+  const double step = 1.0e-4;
+
+  tnsr::ii<DataVector, 3> value{};
+  detail::htt_instantaneous(make_not_null(&value), x, position_1, position_2,
+                            mass_1, mass_2);
+  DataVector norm = make_with_value<DataVector>(x.get(0), 0.0);
+  for (size_t i = 0; i < 3; ++i) {
+    for (size_t j = 0; j < 3; ++j) {
+      norm += square(value.get(i, j));
+    }
+  }
+  norm = sqrt(norm);
+  const DataVector radius =
+      sqrt(square(x.get(0)) + square(x.get(1)) + square(x.get(2)));
+
+  const DataVector trace = value.get(0, 0) + value.get(1, 1) + value.get(2, 2);
+  for (size_t k = 0; k < norm.size(); ++k) {
+    CAPTURE(k);
+    CHECK(std::abs(trace[k]) < 1.0e-12 * norm[k]);
+  }
+
+  std::array<DataVector, 3> divergence{};
+  for (auto& component : divergence) {
+    component = make_with_value<DataVector>(x.get(0), 0.0);
+  }
+  for (size_t k = 0; k < 3; ++k) {
+    auto x_plus = x;
+    auto x_minus = x;
+    x_plus.get(k) += step;
+    x_minus.get(k) -= step;
+    tnsr::ii<DataVector, 3> value_plus{};
+    tnsr::ii<DataVector, 3> value_minus{};
+    detail::htt_instantaneous(make_not_null(&value_plus), x_plus, position_1,
+                              position_2, mass_1, mass_2);
+    detail::htt_instantaneous(make_not_null(&value_minus), x_minus, position_1,
+                              position_2, mass_1, mass_2);
+    for (size_t j = 0; j < 3; ++j) {
+      gsl::at(divergence, j) +=
+          (value_plus.get(k, j) - value_minus.get(k, j)) / (2.0 * step);
+    }
+  }
+  for (size_t j = 0; j < 3; ++j) {
+    for (size_t k = 0; k < norm.size(); ++k) {
+      CAPTURE(j);
+      CAPTURE(k);
+      // |div h| is compared with |h| / r, the size of a single derivative.
+      CHECK(std::abs(gsl::at(divergence, j)[k]) < 1.0e-6 * norm[k] / radius[k]);
+    }
+  }
+}
+
+// Regression against an independent transcription of Kelly et al. Eqs. (12)
+// and (30) (report 028, `k07_eq12_check.py`), not derived from the closed form
+// of report 003.
+void test_instantaneous_regression() {
+  INFO("The instantaneous term matches an independent transcription");
+  const std::array<double, 3> position_1{{5.0, 1.0, -0.5}};
+  const std::array<double, 3> position_2{{-7.0, -2.0, 0.5}};
+  const tnsr::I<DataVector, 3, Frame::Inertial> x{
+      {{DataVector{3.1, 55.0}, DataVector{4.7, 31.0},
+        DataVector{-2.3, -18.0}}}};
+  tnsr::ii<DataVector, 3> value{};
+  detail::htt_instantaneous(make_not_null(&value), x, position_1, position_2,
+                            0.6, 0.4);
+  tnsr::ii<DataVector, 3> expected{};
+  get<0, 0>(expected) =
+      DataVector{7.91089626492511543e-05, 3.47881249419432995e-06};
+  get<0, 1>(expected) =
+      DataVector{1.35250941922065472e-04, 3.99511017985950366e-06};
+  get<0, 2>(expected) =
+      DataVector{-9.08210862582393107e-05, -2.40096325429984148e-06};
+  get<1, 1>(expected) =
+      DataVector{-6.26997505571176301e-04, -1.16261257969088464e-06};
+  get<1, 2>(expected) =
+      DataVector{7.14285568360202702e-04, -6.07576818075491272e-07};
+  get<2, 2>(expected) =
+      DataVector{5.47888542921925472e-04, -2.31619991450371637e-06};
+  CHECK_ITERABLE_APPROX(value, expected);
 }
 
 // A trajectory for the wave tests: quasi-circular at D = 12, long enough to
@@ -1246,6 +1344,8 @@ SPECTRE_TEST_CASE(
   test_instantaneous_matches_uncombined();
   test_instantaneous_structure();
   test_instantaneous_falls_off();
+  test_instantaneous_is_transverse_traceless();
+  test_instantaneous_regression();
   test_retarded_time();
   test_retarded_falls_off_like_one_over_r();
   test_close_approach_in_the_near_zone();
