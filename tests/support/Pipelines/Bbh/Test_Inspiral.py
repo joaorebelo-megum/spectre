@@ -131,6 +131,53 @@ class TestInspiral(unittest.TestCase):
         )
         self.assertEqual(params["AhABMinResolutionL"], 6)
         self.assertEqual(params["AhABMaxPileUpModes"], 4)
+        # Domain size and CCE worldtubes: defaults are unchanged
+        self.assertAlmostEqual(params["EnvelopeRadius"], 100.0 / 15.0 * 20.0)
+        self.assertAlmostEqual(params["OuterShellRadius"], 40.0 * 20.0)
+        self.assertEqual(params["OuterShellExtraRadRef"], 0)
+        self.assertEqual(params["BondiSachsRadii"], "[100.0, 150.0, 200.0]")
+
+    def test_outer_boundary_and_worldtubes(self):
+        with open(self.id_run_dir / "InitialData.yaml") as open_input_file:
+            id_metadata, id_input_file = yaml.safe_load_all(open_input_file)
+
+        def params_for(**kwargs):
+            return inspiral_parameters(
+                id_input_file=id_input_file,
+                id_metadata=id_metadata,
+                id_run_dir=self.id_run_dir,
+                id_subfile_name="VolumeData",
+                id_horizons_path=self.horizons_filename,
+                **kwargs,
+            )
+
+        # Separation 20: envelope at 133.3, default outer boundary at 800. The
+        # outer shell then spans 666.7; at 1200 it spans 1066.7, a factor 1.6,
+        # so one extra radial refinement keeps the elements no wider.
+        params = params_for(
+            outer_shell_radius=1200.0, bondi_sachs_radii=[1000, 200, 400]
+        )
+        self.assertEqual(params["OuterShellRadius"], 1200.0)
+        self.assertEqual(params["OuterShellExtraRadRef"], 1)
+        self.assertEqual(params["BondiSachsRadii"], "[200.0, 400.0, 1000.0]")
+        # A factor 2.8 needs two, a smaller radius none
+        self.assertEqual(
+            params_for(outer_shell_radius=2000.0)["OuterShellExtraRadRef"], 2
+        )
+        self.assertEqual(
+            params_for(outer_shell_radius=700.0)["OuterShellExtraRadRef"], 0
+        )
+        # Doubling the shell exactly needs exactly one
+        self.assertEqual(
+            params_for(outer_shell_radius=800.0 + 666.0 + 2.0 / 3.0)[
+                "OuterShellExtraRadRef"
+            ],
+            1,
+        )
+        with self.assertRaisesRegex(ValueError, "inside the domain"):
+            params_for(outer_shell_radius=1200.0, bondi_sachs_radii=[1300.0])
+        with self.assertRaisesRegex(ValueError, "envelope radius"):
+            params_for(outer_shell_radius=100.0)
 
     def test_cli(self):
         common_args = [

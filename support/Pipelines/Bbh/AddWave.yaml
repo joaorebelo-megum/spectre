@@ -105,7 +105,8 @@ DomainCreator:
       ObjectBShell:   [{{ L + 1 }}, {{ L + 1 }}, {{ L + 1 + ExtraRadRef }}]
       ObjectBCube:    [{{ L + 2 }}, {{ L + 2 }}, {{ L + 1 }}]
       Envelope:       [{{ L + 1 }}, {{ L + 1 }}, {{ L + 1 }}]
-      OuterShell0:    [{{ L     }}, {{ L     }}, {{ L + 2 }}]
+      OuterShell0:    [{{ L     }}, {{ L     }},
+                       {{ L + 2 + OuterShellExtraRadRef | default(0) }}]
     InitialGridPoints:
       ObjectAShell:   [{{ P + 3 }}, {{ P + 3 }}, {{ P + 1 }}]
       ObjectACube:    [{{ P     }}, {{ P     }}, {{ P - 1 }}]

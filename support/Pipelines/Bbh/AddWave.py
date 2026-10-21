@@ -30,6 +30,7 @@ _EVOLUTION_DOMAIN_KEYS = [
     "ObjectOuterRadius",
     "EnvelopeRadius",
     "OuterShellRadius",
+    "OuterShellExtraRadRef",
     "ExtraRadRef",
     "ExtraRadPoints",
     "ExcisionAShapeMass",
@@ -47,6 +48,7 @@ def add_wave_parameters(
     id_input_file: dict,
     id_metadata: dict,
     id_run_dir: Union[str, Path],
+    outer_shell_radius: Optional[float] = None,
 ) -> dict:
     """Determine the parameters of the solve that adds waves to initial data.
 
@@ -57,6 +59,8 @@ def add_wave_parameters(
       id_metadata: Metadata of the initial data input file as a dictionary.
       id_run_dir: Directory of the initial data run. Paths in the input file
         are relative to this directory.
+      outer_shell_radius: Radius of the outer boundary of the evolution domain
+        (see 'inspiral_parameters'). Must match the one of the evolution.
     """
     target_params = id_metadata["TargetParams"]
     id_binary = id_input_file["Background"]["Binary"]
@@ -71,6 +75,7 @@ def add_wave_parameters(
         id_run_dir,
         id_subfile_name=id_subfile_name,
         id_horizons_path=None,
+        outer_shell_radius=outer_shell_radius,
     )
     params = {key: inspiral_params[key] for key in _EVOLUTION_DOMAIN_KEYS}
     params.update(
@@ -134,6 +139,7 @@ def add_waves(
     refinement_level: Optional[int] = None,
     polynomial_order: Optional[int] = None,
     id_run_dir: Optional[Union[str, Path]] = None,
+    outer_shell_radius: Optional[float] = None,
     add_wave_input_file_template: Union[
         str, Path
     ] = ADD_WAVE_INPUT_FILE_TEMPLATE,
@@ -167,7 +173,7 @@ def add_waves(
     with open(id_input_file_path, "r") as open_input_file:
         id_metadata, id_input_file = yaml.safe_load_all(open_input_file)
     add_wave_params = add_wave_parameters(
-        id_input_file, id_metadata, id_run_dir
+        id_input_file, id_metadata, id_run_dir, outer_shell_radius
     )
 
     # Determine resolution in the same way as 'start_inspiral', so the same
@@ -256,6 +262,15 @@ def add_waves(
     "-P",
     type=int,
     help="p-refinement level.",
+)
+@click.option(
+    "--outer-shell-radius",
+    type=float,
+    help=(
+        "Radius of the outer boundary of the evolution domain, as for"
+        " 'start-inspiral'. Use the same value as for the evolution."
+    ),
+    show_default="40 times the initial separation",
 )
 @scheduler_options
 def add_waves_command(**kwargs):

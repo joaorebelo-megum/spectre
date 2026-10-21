@@ -79,6 +79,22 @@ class TestAddWave(unittest.TestCase):
         )
         self.assertEqual(params["PastEvolutionTimeStep"], 0.5)
         self.assertTrue(params["GaugeInvariantWaveAmplitude"])
+        self.assertEqual(params["OuterShellExtraRadRef"], 0)
+
+        # A larger evolution domain: the solve uses it too, with the extra
+        # radial refinement of the evolution, and the past evolution covers it
+        with self.assertLogs(level=logging.WARNING):
+            params = add_wave_parameters(
+                self.id_input_file,
+                self.id_metadata,
+                self.id_run_dir,
+                outer_shell_radius=1200.0,
+            )
+        self.assertAlmostEqual(params["OuterShellRadius"], 1200.0)
+        self.assertEqual(params["OuterShellExtraRadRef"], 1)
+        self.assertAlmostEqual(
+            params["PastEvolutionDuration"], 1.5 * (1200.0 + 20.0)
+        )
 
         self.id_metadata["TargetParams"]["Eccentricity"] = 0.1
         with self.assertRaisesRegex(ValueError, "eccentricity of zero"):

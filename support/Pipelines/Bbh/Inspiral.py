@@ -4,7 +4,7 @@
 import glob
 import logging
 from pathlib import Path
-from typing import Optional, Union
+from typing import Optional, Sequence, Union
 
 import click
 import numpy as np
@@ -139,6 +139,8 @@ def inspiral_parameters(
     id_run_dir: Union[str, Path],
     id_subfile_name: Optional[str],
     id_horizons_path: Optional[Union[str, Path]],
+    outer_shell_radius: Optional[float] = None,
+    bondi_sachs_radii: Optional[Sequence[float]] = None,
 ) -> dict:
     """Determine inspiral parameters from SpECTRE initial data.
 
@@ -156,6 +158,13 @@ def inspiral_parameters(
         horizons in the ID (e.g. mass, spin, spherical harmonic coefficients).
         If this is 'None', the default is the 'Horizons.h5' file inside
         'id_run_dir'.
+      outer_shell_radius: Radius of the outer boundary. Default is 40 times
+        the initial separation. A larger radius adds radial refinement to the
+        outer shell so its radial resolution of gravitational waves is not
+        reduced.
+      bondi_sachs_radii: Radii of the worldtubes on which Bondi-Sachs data is
+        written for CCE. Each must lie inside the domain. Default: 100, 150,
+        200.
     """
     # For constraints and control system params we just use the target masses
     # and spins, not the values measured on the horizons, because these numbers
@@ -226,6 +235,45 @@ def inspiral_parameters(
                 choices=id_subfiles,
             )
 
+    # Outer boundary and the radial refinement of the outer shell. The outer
+    # shell has a fixed number of radial elements, so moving the outer boundary
+    # out stretches them. Add radial refinement levels until the elements are no
+    # wider than with the default radius, so gravitational waves stay resolved.
+    envelope_radius = 100.0 / 15.0 * initial_separation
+    # SpEC chooses the outer radius based on a Newtonian estimate of the wave
+    # zone (See function AutoRmax in SpEC/Support/Perl/SpEC.pm). This may need
+    # to be ported over eventually.
+    default_outer_shell_radius = 600.0 / 15.0 * initial_separation
+    if outer_shell_radius is None:
+        outer_shell_radius = default_outer_shell_radius
+    if outer_shell_radius <= envelope_radius:
+        raise ValueError(
+            f"The outer shell radius {outer_shell_radius} must be larger than"
+            f" the envelope radius {envelope_radius}."
+        )
+    outer_shell_extra_rad_ref = max(
+        0,
+        int(
+            np.ceil(
+                np.log2(
+                    (outer_shell_radius - envelope_radius)
+                    / (default_outer_shell_radius - envelope_radius)
+                )
+                - 1.0e-12
+            )
+        ),
+    )
+    # Worldtubes for CCE
+    if bondi_sachs_radii is None:
+        bondi_sachs_radii = [100.0, 150.0, 200.0]
+    bondi_sachs_radii = sorted(float(radius) for radius in bondi_sachs_radii)
+    for radius in bondi_sachs_radii:
+        if not (0.0 < radius < outer_shell_radius):
+            raise ValueError(
+                f"The Bondi-Sachs radius {radius} must lie inside the domain,"
+                f" whose outer boundary is at {outer_shell_radius}."
+            )
+
     params = {
         # Initial data files
         "IdFileGlob": id_file_glob,
@@ -245,12 +293,14 @@ def inspiral_parameters(
         "XCoordB": id_domain_creator["ObjectB"]["XCoord"],
         "CenterOfMassOffset_y": id_domain_creator["CenterOfMassOffset"][0],
         "CenterOfMassOffset_z": id_domain_creator["CenterOfMassOffset"][1],
-        "EnvelopeRadius": 100.0 / 15.0 * initial_separation,
-        # SpEC chooses the outer radius based on a Newtonian estimate of the
-        # wave zone (See function AutoRmax in SpEC/Support/Perl/SpEC.pm). This
-        # may need to be ported over eventually. The CCE extraction radii may
-        # also need to be adjusted to account for different outer shell radii.
-        "OuterShellRadius": 600.0 / 15.0 * initial_separation,
+        "EnvelopeRadius": envelope_radius,
+        "OuterShellRadius": outer_shell_radius,
+        "OuterShellExtraRadRef": outer_shell_extra_rad_ref,
+        # A YAML list as a string: 'schedule' would treat a list as a range of
+        # runs and schedule one run per radius
+        "BondiSachsRadii": (
+            "[" + ", ".join(str(radius) for radius in bondi_sachs_radii) + "]"
+        ),
         # Extra resolution for unequal masses (to be replaced with AMR)
         # This extra refinement was found through trial and error and allowed
         # mass ratio 6 to evolve through inspiral stably.
@@ -460,6 +510,8 @@ def start_inspiral(
         str, Path
     ] = INSPIRAL_INPUT_FILE_TEMPLATE,
     id_horizons_path: Optional[Union[str, Path]] = None,
+    outer_shell_radius: Optional[float] = None,
+    bondi_sachs_radii: Optional[Sequence[float]] = None,
     continue_with_ringdown: bool = False,
     eccentricity_control: bool = False,
     pipeline_dir: Optional[Union[str, Path]] = None,
@@ -510,6 +562,8 @@ def start_inspiral(
             id_run_dir,
             id_subfile_name=id_subfile_name,
             id_horizons_path=id_horizons_path,
+            outer_shell_radius=outer_shell_radius,
+            bondi_sachs_radii=bondi_sachs_radii or None,
         )
 
     # Determine resolution
@@ -682,6 +736,26 @@ def start_inspiral(
     "-P",
     type=int,
     help="p-refinement level.",
+)
+@click.option(
+    "--outer-shell-radius",
+    type=float,
+    help=(
+        "Radius of the outer boundary. A larger radius than the default adds"
+        " radial refinement to the outer shell, so gravitational waves stay"
+        " resolved."
+    ),
+    show_default="40 times the initial separation",
+)
+@click.option(
+    "--bondi-sachs-radii",
+    type=float,
+    multiple=True,
+    help=(
+        "Radius of a worldtube on which Bondi-Sachs data is written for CCE."
+        " Repeat for several radii. Must lie inside the domain."
+    ),
+    show_default="100, 150, 200",
 )
 @click.option(
     "--continue-with-ringdown",
